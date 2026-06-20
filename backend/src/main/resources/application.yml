@@ -2,6 +2,9 @@ spring:
   datasource:
     url: jdbc:sqlite:${user.home}/tradelog/tradelog.db
     driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 1
+      connection-init-sql: "PRAGMA foreign_keys = ON"
   jpa:
     database-platform: org.hibernate.community.dialect.SQLiteDialect
     hibernate:
