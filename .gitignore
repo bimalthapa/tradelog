@@ -1,0 +1,40 @@
+# ─── Database ───────────────────────────────────────────────────────────────
+# The live database lives outside the project at ~/tradelog/tradelog.db
+# If any .db file ever ends up here, do not commit it
+*.db
+*.db-shm
+*.db-wal
+
+# ─── Backend (Maven / Spring Boot) ──────────────────────────────────────────
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+!backend/.mvn/wrapper/maven-wrapper.properties
+
+# Spring Boot devtools restart file
+backend/.restarttrigger
+backend/HELP.md
+
+# ─── Frontend (Vue / Vite / Node) ───────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.local
+
+# ─── Environment / secrets ──────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── OS & editor noise ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+
+# ─── Logs ───────────────────────────────────────────────────────────────────
+*.log
+logs/
+.superpowers/
