@@ -1,0 +1,188 @@
+package com.tradelog.trade;
+
+import com.tradelog.campaign.Campaign;
+import com.tradelog.campaign.CampaignRepository;
+import com.tradelog.common.exception.ResourceNotFoundException;
+import com.tradelog.position.PositionService;
+import com.tradelog.trade.dto.SaveTradeRequest;
+import com.tradelog.trade.dto.TradeLegResponse;
+import com.tradelog.trade.parser.ParsedTradeInput;
+import com.tradelog.trade.parser.TradeInputParser;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.lang.reflect.Field;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class TradeEntryServiceTest {
+
+    @Mock TradeInputParser parser;
+    @Mock CampaignRepository campaignRepository;
+    @Mock TradeEntryRepository tradeEntryRepository;
+    @Mock TradeLegRepository tradeLegRepository;
+    @Mock PositionService positionService;
+
+    @InjectMocks
+    TradeEntryService service;
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    private ParsedTradeInput validOptionParsed() {
+        return new ParsedTradeInput(
+                "STO", 5, "SPY", "OPTION", "PUT",
+                480.0, LocalDate.of(2026, 12, 20),
+                2.35, 1175.0, "CSP", true, null);
+    }
+
+    private TradeEntry makeEntry(Long id, Long campaignId, String strategyTag, String notes) {
+        TradeEntry e = new TradeEntry();
+        e.setCampaignId(campaignId);
+        e.setStrategyTag(strategyTag);
+        e.setNotes(notes);
+        setId(e, id);
+        return e;
+    }
+
+    private TradeLeg makeLeg(Long id, Long entryId, Long campaignId) {
+        TradeLeg leg = new TradeLeg();
+        leg.setTradeEntryId(entryId);
+        leg.setCampaignId(campaignId);
+        leg.setInstrumentType("OPTION");
+        leg.setAction("STO");
+        leg.setTicker("SPY");
+        leg.setQuantity(5);
+        leg.setPrice(2.35);
+        leg.setNetCashFlow(1175.0);
+        leg.setOptionType("PUT");
+        leg.setStrike(480.0);
+        leg.setExpiry(LocalDate.of(2026, 12, 20));
+        leg.setTradedAt(LocalDate.now());
+        setId(leg, id);
+        return leg;
+    }
+
+    private static void setId(Object target, Long id) {
+        try {
+            Field f = target.getClass().getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(target, id);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // ── save() tests ─────────────────────────────────────────────────────────
+
+    @Test
+    void save_throwsNotFound_whenCampaignMissing() {
+        when(campaignRepository.findById(99L)).thenReturn(Optional.empty());
+
+        SaveTradeRequest req = new SaveTradeRequest(99L, "STO 5 SPY 480P 12/20 @2.35", null, null);
+
+        assertThatThrownBy(() -> service.save(req))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("99");
+    }
+
+    @Test
+    void save_throwsIllegalArgument_whenParseInvalid() {
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(new Campaign()));
+        when(parser.parse(any())).thenReturn(ParsedTradeInput.invalid("Unrecognized trade format"));
+
+        SaveTradeRequest req = new SaveTradeRequest(1L, "garbage input", null, null);
+
+        assertThatThrownBy(() -> service.save(req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unrecognized trade format");
+    }
+
+    @Test
+    void save_createsEntryAndLeg_andCallsApplyLeg() {
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(new Campaign()));
+        when(parser.parse("STO 5 SPY 480P 12/20 @2.35")).thenReturn(validOptionParsed());
+
+        TradeEntry fakeEntry = makeEntry(10L, 1L, "CSP", null);
+        when(tradeEntryRepository.save(any())).thenReturn(fakeEntry);
+
+        TradeLeg fakeLeg = makeLeg(20L, 10L, 1L);
+        when(tradeLegRepository.save(any())).thenReturn(fakeLeg);
+
+        SaveTradeRequest req = new SaveTradeRequest(1L, "STO 5 SPY 480P 12/20 @2.35", "CSP", null);
+        TradeLegResponse resp = service.save(req);
+
+        verify(tradeEntryRepository).save(any(TradeEntry.class));
+        verify(tradeLegRepository).save(any(TradeLeg.class));
+        verify(positionService).applyLeg(fakeLeg);
+
+        assertThat(resp.id()).isEqualTo(20L);
+        assertThat(resp.tradeEntryId()).isEqualTo(10L);
+        assertThat(resp.campaignId()).isEqualTo(1L);
+        assertThat(resp.action()).isEqualTo("STO");
+        assertThat(resp.ticker()).isEqualTo("SPY");
+        assertThat(resp.quantity()).isEqualTo(5);
+        assertThat(resp.price()).isEqualTo(2.35);
+        assertThat(resp.netCashFlow()).isEqualTo(1175.0);
+        assertThat(resp.optionType()).isEqualTo("PUT");
+        assertThat(resp.strike()).isEqualTo(480.0);
+        assertThat(resp.strategyTag()).isEqualTo("CSP");
+    }
+
+    @Test
+    void save_usesParserStrategy_whenStrategyTagIsNull() {
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(new Campaign()));
+        when(parser.parse(any())).thenReturn(validOptionParsed());
+
+        ArgumentCaptor<TradeEntry> entryCaptor = ArgumentCaptor.forClass(TradeEntry.class);
+        TradeEntry fakeEntry = makeEntry(10L, 1L, "CSP", null);
+        when(tradeEntryRepository.save(entryCaptor.capture())).thenReturn(fakeEntry);
+        when(tradeLegRepository.save(any())).thenReturn(makeLeg(20L, 10L, 1L));
+
+        // strategyTag is null in request — should fall back to parsed.strategy() = "CSP"
+        SaveTradeRequest req = new SaveTradeRequest(1L, "STO 5 SPY 480P 12/20 @2.35", null, null);
+        service.save(req);
+
+        assertThat(entryCaptor.getValue().getStrategyTag()).isEqualTo("CSP");
+    }
+
+    // ── listByCampaign() tests ────────────────────────────────────────────────
+
+    @Test
+    void listByCampaign_returnsLegsWithEntryMetadata() {
+        TradeLeg leg = makeLeg(20L, 10L, 1L);
+        TradeEntry entry = makeEntry(10L, 1L, "CSP", "a note");
+
+        when(tradeLegRepository.findByCampaignIdOrderByTradedAtAsc(1L)).thenReturn(List.of(leg));
+        when(tradeEntryRepository.findById(10L)).thenReturn(Optional.of(entry));
+
+        List<TradeLegResponse> results = service.listByCampaign(1L);
+
+        assertThat(results).hasSize(1);
+        TradeLegResponse r = results.get(0);
+        assertThat(r.strategyTag()).isEqualTo("CSP");
+        assertThat(r.notes()).isEqualTo("a note");
+        assertThat(r.id()).isEqualTo(20L);
+        assertThat(r.tradeEntryId()).isEqualTo(10L);
+    }
+
+    @Test
+    void listByCampaign_returnsEmpty_whenNoLegs() {
+        when(tradeLegRepository.findByCampaignIdOrderByTradedAtAsc(99L)).thenReturn(List.of());
+
+        List<TradeLegResponse> results = service.listByCampaign(99L);
+
+        assertThat(results).isEmpty();
+    }
+}

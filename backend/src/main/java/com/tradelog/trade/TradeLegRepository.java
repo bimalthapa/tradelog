@@ -4,6 +4,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface TradeLegRepository extends JpaRepository<TradeLeg, Long> {
 
     @Query("SELECT SUM(tl.netCashFlow) FROM TradeLeg tl WHERE tl.campaignId = :campaignId")
@@ -14,4 +16,6 @@ public interface TradeLegRepository extends JpaRepository<TradeLeg, Long> {
 
     @Query("SELECT SUM(tl.netCashFlow) FROM TradeLeg tl WHERE tl.campaignId = :campaignId AND tl.instrumentType = 'STOCK'")
     Double findStockNetCashFlowByCampaignId(@Param("campaignId") Long campaignId);
+
+    List<TradeLeg> findByCampaignIdOrderByTradedAtAsc(Long campaignId);
 }
