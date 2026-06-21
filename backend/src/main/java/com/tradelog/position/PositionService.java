@@ -3,7 +3,6 @@ package com.tradelog.position;
 import com.tradelog.trade.TradeLeg;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
 import java.util.Optional;
 
 @Service
