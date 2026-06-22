@@ -1,0 +1,24 @@
+{
+  "name": "tradelog",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently --names 'backend,frontend' --prefix-colors 'blue,green' 'cd backend && mvn spring-boot:run' 'cd frontend && npm run dev'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bimalthapa/tradelog.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/bimalthapa/tradelog/issues"
+  },
+  "homepage": "https://github.com/bimalthapa/tradelog#readme",
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

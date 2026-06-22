@@ -1,0 +1,85 @@
+:root {
+  /* Surfaces */
+  --surface:                   #10131a;
+  --surface-dim:               #10131a;
+  --surface-bright:            #363941;
+  --surface-container-lowest:  #0b0e15;
+  --surface-container-low:     #191b23;
+  --surface-container:         #1d2027;
+  --surface-container-high:    #272a31;
+  --surface-container-highest: #32353c;
+  --background:                #10131a;
+
+  /* Text on surfaces */
+  --on-surface:         #e1e2ec;
+  --on-surface-variant: #c2c6d6;
+  --inverse-surface:    #e1e2ec;
+  --inverse-on-surface: #2e3038;
+
+  /* Borders */
+  --outline:         #8c909f;
+  --outline-variant: #424754;
+
+  /* Primary (accent blue) */
+  --primary:               #adc6ff;
+  --on-primary:            #002e6a;
+  --primary-container:     #4d8eff;
+  --on-primary-container:  #00285d;
+  --inverse-primary:       #005ac2;
+  --surface-tint:          #adc6ff;
+
+  /* Secondary (profit / credit / active — green) */
+  --secondary:              #4ae176;
+  --on-secondary:           #003915;
+  --secondary-container:    #00b954;
+  --on-secondary-container: #004119;
+
+  /* Tertiary (loss / debit — red/pink) */
+  --tertiary:              #ffb3b0;
+  --on-tertiary:           #670211;
+  --tertiary-container:    #ea6767;
+  --on-tertiary-container: #5b000d;
+
+  /* Error */
+  --error:              #ffb4ab;
+  --on-error:           #690005;
+  --error-container:    #93000a;
+  --on-error-container: #ffdad6;
+
+  /* Semantic shortcuts */
+  --color-profit:  var(--secondary);
+  --color-loss:    var(--tertiary);
+  --color-accent:  var(--primary);
+  --color-warning: #f59e0b;
+
+  /* Typography */
+  --font-ui:   'Space Grotesk', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--on-surface);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--surface-container-lowest); }
+::-webkit-scrollbar-thumb { background: var(--outline-variant); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--outline); }
