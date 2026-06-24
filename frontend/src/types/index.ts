@@ -62,6 +62,13 @@ export interface ParsedTrade {
   error?: string
 }
 
+export interface CreateCampaignRequest {
+  ticker: string
+  label?: string
+  notes?: string
+  openedAt: string
+}
+
 export const MOCK_PRICES: Record<string, number> = {
   NVDA: 875.40,
   SPY:  502.18,

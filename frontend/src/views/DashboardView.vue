@@ -1,81 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Campaign } from '@/types/index'
 import { MOCK_PRICES } from '@/types/index'
+import { useTradeLogStore } from '@/stores/tradeLog'
 import CampaignRow from '@/components/dashboard/CampaignRow.vue'
 
 const router = useRouter()
+const store  = useTradeLogStore()
 
-const mockCampaigns: Campaign[] = [
-  {
-    id: 1,
-    ticker: 'NVDA',
-    label: 'Wheel Strategy',
-    status: 'OPEN',
-    openedAt: '2024-01-15',
-    netCashFlow: -246300,
-    costBasis: 820.83,
-    sharesHeld: 300,
-    openPositionCount: 1,
-    realizedPnl: 6900,
-  },
-  {
-    id: 2,
-    ticker: 'SPY',
-    label: 'Calendar Spreads',
-    status: 'OPEN',
-    openedAt: '2024-02-10',
-    netCashFlow: -265,
-    openPositionCount: 2,
-    realizedPnl: 2200,
-  },
-  {
-    id: 3,
-    ticker: 'TSLA',
-    label: 'Short Puts',
-    status: 'OPEN',
-    openedAt: '2024-03-05',
-    netCashFlow: 1400,
-    openPositionCount: 1,
-    realizedPnl: 420,
-  },
-  {
-    id: 4,
-    ticker: 'AAPL',
-    label: 'Wheel Exit',
-    status: 'CLOSED',
-    openedAt: '2023-10-12',
-    closedAt: '2024-01-10',
-    netCashFlow: 850,
-    openPositionCount: 0,
-    realizedPnl: 850,
-  },
-  {
-    id: 5,
-    ticker: 'AMD',
-    label: 'Covered Calls',
-    status: 'CLOSED',
-    openedAt: '2023-08-20',
-    closedAt: '2024-02-15',
-    netCashFlow: 2800,
-    costBasis: 122.10,
-    sharesHeld: 200,
-    openPositionCount: 0,
-    realizedPnl: 1200,
-  },
-]
-
-const mockKpis = { totalUnrealized: 16250, totalRealized: 11530, premiumCollected: 11955 }
-const mockTotalTrades = 24
-
-const activeCampaigns = computed(() => mockCampaigns.filter(c => c.status === 'OPEN'))
-const closedCampaigns = computed(() => mockCampaigns.filter(c => c.status === 'CLOSED'))
+onMounted(() => store.fetchCampaigns())
 
 function unrealizedFor(c: Campaign): number {
   if (!c.sharesHeld || c.costBasis == null) return 0
-  const price = MOCK_PRICES[c.ticker] ?? 0
-  return Math.round(c.sharesHeld * (price - c.costBasis))
+  return Math.round(c.sharesHeld * ((MOCK_PRICES[c.ticker] ?? 0) - c.costBasis))
 }
 
 function formatKpi(value: number): string {
@@ -92,16 +30,25 @@ const TABLE_COLS = [
   'NET CASH', 'UNRLZ P&L', 'RLZ P&L', 'STATUS', 'STARTED',
 ]
 
-const kpiStats = [
-  { label: 'TOTAL UNREALIZED', value: mockKpis.totalUnrealized },
-  { label: 'TOTAL REALIZED', value: mockKpis.totalRealized },
-  { label: 'PREMIUM COLLECTED', value: mockKpis.premiumCollected },
-]
+const totalUnrealized = computed(() =>
+  store.campaigns.reduce((sum, c) => sum + unrealizedFor(c), 0)
+)
+const totalRealized = computed(() =>
+  store.campaigns.reduce((sum, c) => sum + (c.realizedPnl ?? 0), 0)
+)
+const totalNetCashFlow = computed(() =>
+  store.campaigns.reduce((sum, c) => sum + c.netCashFlow, 0)
+)
+
+const kpiStats = computed(() => [
+  { label: 'TOTAL UNREALIZED', value: totalUnrealized.value },
+  { label: 'TOTAL REALIZED',   value: totalRealized.value },
+  { label: 'NET CASH FLOW',    value: totalNetCashFlow.value },
+])
 
 const footerStats = computed(() => [
-  { label: 'ACTIVE CAMPAIGNS', value: activeCampaigns.value.length },
-  { label: 'TOTAL CAMPAIGNS', value: mockCampaigns.length },
-  { label: 'TOTAL TRADES', value: mockTotalTrades },
+  { label: 'ACTIVE CAMPAIGNS', value: store.activeCampaigns.length },
+  { label: 'TOTAL CAMPAIGNS',  value: store.campaigns.length },
 ])
 </script>
 
@@ -124,55 +71,66 @@ const footerStats = computed(() => [
       </div>
     </div>
 
-    <!-- Active campaigns -->
-    <div class="section-head">
-      <span class="dot dot-active">●</span>
-      <span class="section-label">ACTIVE CAMPAIGNS</span>
-      <span class="section-count">({{ activeCampaigns.length }})</span>
-    </div>
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th v-for="col in TABLE_COLS" :key="col" class="th">{{ col }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <CampaignRow
-            v-for="c in activeCampaigns"
-            :key="c.id"
-            :campaign="c"
-            :unrealized-pnl="unrealizedFor(c)"
-            @select="onSelect"
-          />
-        </tbody>
-      </table>
-    </div>
+    <!-- Loading / error -->
+    <template v-if="store.loading">
+      <div class="state-msg">Loading...</div>
+    </template>
+    <template v-else-if="store.error">
+      <div class="state-msg state-msg--error">{{ store.error }}</div>
+    </template>
+    <template v-else>
 
-    <!-- Closed campaigns -->
-    <div class="section-head section-head--gap">
-      <span class="dot dot-closed">●</span>
-      <span class="section-label">CLOSED CAMPAIGNS</span>
-      <span class="section-count">({{ closedCampaigns.length }})</span>
-    </div>
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th v-for="col in TABLE_COLS" :key="col" class="th">{{ col }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <CampaignRow
-            v-for="c in closedCampaigns"
-            :key="c.id"
-            :campaign="c"
-            :unrealized-pnl="unrealizedFor(c)"
-            @select="onSelect"
-          />
-        </tbody>
-      </table>
-    </div>
+      <!-- Active campaigns -->
+      <div class="section-head">
+        <span class="dot dot-active">●</span>
+        <span class="section-label">ACTIVE CAMPAIGNS</span>
+        <span class="section-count">({{ store.activeCampaigns.length }})</span>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th v-for="col in TABLE_COLS" :key="col" class="th">{{ col }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <CampaignRow
+              v-for="c in store.activeCampaigns"
+              :key="c.id"
+              :campaign="c"
+              :unrealized-pnl="unrealizedFor(c)"
+              @select="onSelect"
+            />
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Closed campaigns -->
+      <div class="section-head section-head--gap">
+        <span class="dot dot-closed">●</span>
+        <span class="section-label">CLOSED CAMPAIGNS</span>
+        <span class="section-count">({{ store.closedCampaigns.length }})</span>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th v-for="col in TABLE_COLS" :key="col" class="th">{{ col }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <CampaignRow
+              v-for="c in store.closedCampaigns"
+              :key="c.id"
+              :campaign="c"
+              :unrealized-pnl="unrealizedFor(c)"
+              @select="onSelect"
+            />
+          </tbody>
+        </table>
+      </div>
+
+    </template>
 
     <!-- Footer -->
     <div class="footer">
@@ -320,4 +278,16 @@ const footerStats = computed(() => [
 /* ── P&L colors ── */
 .profit { color: var(--color-profit); }
 .loss   { color: var(--color-loss); }
+
+/* ── Loading / error ── */
+.state-msg {
+  padding: 40px 28px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.state-msg--error {
+  color: var(--color-loss);
+}
 </style>
