@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import TradeEntryBar from '@/components/campaign/TradeEntryBar.vue'
 import { useRoute } from 'vue-router'
 import { useTradeLogStore } from '@/stores/tradeLog'
 import { MOCK_PRICES } from '@/types/index'
+import type { ParsedTrade } from '@/types/index'
 
 const route = useRoute()
 const store = useTradeLogStore()
@@ -31,6 +33,10 @@ function formatCurrency(value: number | null | undefined): string {
 function formatSigned(value: number): string {
   const sign = value >= 0 ? '+' : ''
   return sign + formatCurrency(value)
+}
+
+function onParsed(_trade: ParsedTrade) {
+  // Confirm Panel wired in T13
 }
 </script>
 
@@ -104,8 +110,11 @@ function formatSigned(value: number): string {
           </div>
         </div>
 
-      </div>
-    </template>
+      </div><!-- end .header -->
+
+      <TradeEntryBar @parsed="onParsed" />
+
+    </template><!-- end v-else -->
 
   </div>
 </template>

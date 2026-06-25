@@ -207,3 +207,14 @@ describe('stat strip', () => {
     expect(stats[4]!.text()).toBe('—')
   })
 })
+
+// ── Trade entry bar ─────────────────────────────────────────────────────────
+
+describe('trade entry bar', () => {
+  it('renders TradeEntryBar when campaign is found', async () => {
+    vi.mocked(getCampaigns).mockResolvedValue([mockCampaign])
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('.trade-entry').exists()).toBe(true)
+  })
+})
