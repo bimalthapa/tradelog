@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import TradeEntryBar from '@/components/campaign/TradeEntryBar.vue'
+import PositionRow from '@/components/campaign/PositionRow.vue'
+import TradeRow from '@/components/campaign/TradeRow.vue'
 import { useRoute } from 'vue-router'
 import { useTradeLogStore } from '@/stores/tradeLog'
 import { MOCK_PRICES } from '@/types/index'
-import type { ParsedTrade } from '@/types/index'
+import type { ParsedTrade, Position, TradeLeg } from '@/types/index'
 
 const route = useRoute()
 const store = useTradeLogStore()
@@ -38,6 +40,76 @@ function formatSigned(value: number): string {
 function onParsed(_trade: ParsedTrade) {
   // Confirm Panel wired in T13
 }
+
+const MOCK_POSITIONS: Position[] = [
+  {
+    id: 1,
+    campaignId: 1,
+    instrumentType: 'OPTION',
+    ticker: 'SPY',
+    optionType: 'PUT',
+    strike: 480,
+    expiry: '2024-12-20',
+    openAction: 'STO',
+    openQuantity: 5,
+    avgPrice: 2.35,
+    status: 'OPEN',
+    openedAt: '2024-11-01',
+  },
+  {
+    id: 2,
+    campaignId: 1,
+    instrumentType: 'OPTION',
+    ticker: 'SPY',
+    optionType: 'CALL',
+    strike: 510,
+    expiry: '2024-12-20',
+    openAction: 'STO',
+    openQuantity: 3,
+    avgPrice: 1.80,
+    status: 'OPEN',
+    openedAt: '2024-11-08',
+  },
+]
+
+const MOCK_TRADES: TradeLeg[] = [
+  {
+    id: 1, tradeEntryId: 1, campaignId: 1,
+    instrumentType: 'OPTION', action: 'STO', ticker: 'SPY',
+    quantity: 5, price: 2.35, netCashFlow: 1175,
+    optionType: 'PUT', strike: 480, expiry: '2024-12-20',
+    tradedAt: '2024-11-01', strategyTag: 'CSP',
+  },
+  {
+    id: 2, tradeEntryId: 2, campaignId: 1,
+    instrumentType: 'OPTION', action: 'STO', ticker: 'SPY',
+    quantity: 3, price: 1.80, netCashFlow: 540,
+    optionType: 'CALL', strike: 510, expiry: '2024-12-20',
+    tradedAt: '2024-11-08', strategyTag: 'CC',
+  },
+  {
+    id: 3, tradeEntryId: 3, campaignId: 1,
+    instrumentType: 'OPTION', action: 'BTC', ticker: 'SPY',
+    quantity: 2, price: 0.50, netCashFlow: -100,
+    optionType: 'PUT', strike: 480, expiry: '2024-12-20',
+    tradedAt: '2024-11-15', strategyTag: 'CSP',
+  },
+  {
+    id: 4, tradeEntryId: 4, campaignId: 1,
+    instrumentType: 'OPTION', action: 'EXPIRED', ticker: 'SPY',
+    quantity: 1, price: 0, netCashFlow: 0,
+    optionType: 'CALL', strike: 510, expiry: '2024-12-20',
+    tradedAt: '2024-12-20', strategyTag: 'CC',
+  },
+  {
+    id: 5, tradeEntryId: 5, campaignId: 1,
+    instrumentType: 'STOCK', action: 'BTO', ticker: 'SPY',
+    quantity: 100, price: 498.50, netCashFlow: -49850,
+    tradedAt: '2024-12-20',
+  },
+]
+
+const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
 </script>
 
 <template>
@@ -113,6 +185,61 @@ function onParsed(_trade: ParsedTrade) {
       </div><!-- end .header -->
 
       <TradeEntryBar @parsed="onParsed" />
+
+      <!-- Open Positions -->
+      <div v-if="MOCK_POSITIONS.length > 0" class="section positions-section">
+        <div class="section-label">
+          <span class="dot">●</span>
+          OPEN POSITIONS
+          <span class="count">({{ MOCK_POSITIONS.length }})</span>
+        </div>
+        <table class="table">
+          <thead>
+            <tr class="thead-row">
+              <th class="th">OPENED</th>
+              <th class="th">ACTION</th>
+              <th class="th">QTY</th>
+              <th class="th">INSTRUMENT</th>
+              <th class="th">AVG PRICE</th>
+              <th class="th">STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <PositionRow v-for="pos in MOCK_POSITIONS" :key="pos.id" :position="pos" />
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Trade History -->
+      <div class="section history-section">
+        <div class="section-label">
+          TRADE HISTORY
+          <span class="count">({{ MOCK_TRADES.length }})</span>
+        </div>
+        <table class="table">
+          <thead>
+            <tr class="thead-row">
+              <th class="th">DATE</th>
+              <th class="th">ACTION</th>
+              <th class="th">QTY</th>
+              <th class="th">INSTRUMENT</th>
+              <th class="th">PRICE</th>
+              <th class="th">CASH FLOW</th>
+              <th class="th">STRATEGY</th>
+              <th class="th">STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <TradeRow v-for="trade in MOCK_TRADES" :key="trade.id" :trade="trade" />
+          </tbody>
+        </table>
+        <div class="ncf-footer">
+          <span class="ncf-label">NET CASH FLOW</span>
+          <span class="ncf-value" :class="mockNetCashFlow >= 0 ? 'profit' : 'loss'">
+            {{ formatSigned(mockNetCashFlow) }}
+          </span>
+        </div>
+      </div>
 
     </template><!-- end v-else -->
 
@@ -263,5 +390,82 @@ function onParsed(_trade: ParsedTrade) {
 
 .state-msg--error {
   color: var(--color-loss);
+}
+
+/* ── Sections ── */
+.section {
+  padding: 16px 28px 0;
+}
+
+.history-section {
+  padding-bottom: 40px;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  color: var(--primary);
+}
+
+.count {
+  color: var(--outline);
+  font-weight: 400;
+}
+
+/* ── Tables ── */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.thead-row {
+  background: var(--surface-container-low);
+}
+
+.th {
+  padding: 0 10px;
+  height: 28px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* ── Net Cash Flow footer ── */
+.ncf-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 24px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--outline-variant);
+}
+
+.ncf-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.ncf-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
 }
 </style>

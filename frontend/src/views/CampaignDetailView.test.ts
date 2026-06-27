@@ -218,3 +218,56 @@ describe('trade entry bar', () => {
     expect(wrapper.find('.trade-entry').exists()).toBe(true)
   })
 })
+
+// ── Open Positions section ──────────────────────────────────────────────────
+
+describe('open positions section', () => {
+  beforeEach(() => {
+    vi.mocked(getCampaigns).mockResolvedValue([mockCampaign])
+  })
+
+  it('renders the positions section', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('.positions-section').exists()).toBe(true)
+  })
+
+  it('renders 2 position rows (one per mock position)', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.findAll('.pos-row')).toHaveLength(2)
+  })
+})
+
+// ── Trade History section ───────────────────────────────────────────────────
+
+describe('trade history section', () => {
+  beforeEach(() => {
+    vi.mocked(getCampaigns).mockResolvedValue([mockCampaign])
+  })
+
+  it('renders the history section', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('.history-section').exists()).toBe(true)
+  })
+
+  it('renders 5 trade rows (one per mock trade)', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.findAll('.trade-row')).toHaveLength(5)
+  })
+
+  it('renders net cash flow footer', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('.ncf-footer').exists()).toBe(true)
+  })
+
+  it('net cash flow footer shows the sum of mock trade cash flows', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    // 1175 + 540 - 100 + 0 - 49850 = -48235
+    expect(wrapper.find('.ncf-value').text()).toContain('48,235')
+  })
+})
