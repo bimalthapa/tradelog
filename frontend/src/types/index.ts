@@ -69,6 +69,13 @@ export interface CreateCampaignRequest {
   openedAt: string
 }
 
+export interface SaveTradeRequest {
+  campaignId: number
+  rawInput: string
+  strategyTag?: string
+  notes?: string
+}
+
 export const MOCK_PRICES: Record<string, number> = {
   NVDA: 875.40,
   SPY:  502.18,

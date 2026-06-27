@@ -1,0 +1,104 @@
+// @vitest-environment happy-dom
+import { describe, it, expect } from 'vitest'
+import { mount } from '@vue/test-utils'
+import ConfirmPanel from './ConfirmPanel.vue'
+import type { ParsedTrade } from '@/types/index'
+
+const mockTrade: ParsedTrade = {
+  action: 'STO', qty: 5, ticker: 'SPY',
+  instrumentType: 'OPTION', optionType: 'PUT',
+  strike: 480, expiry: '2024-12-20',
+  price: 2.35, cashFlow: 1175,
+  strategy: 'CSP', valid: true,
+}
+
+function mountPanel(props: { trade: ParsedTrade; saveError?: string } = { trade: mockTrade }) {
+  return mount(ConfirmPanel, { props })
+}
+
+describe('ConfirmPanel — rendering', () => {
+  it('renders CONFIRM TRADE header', () => {
+    expect(mountPanel().find('.panel-title').text()).toBe('CONFIRM TRADE')
+  })
+
+  it('displays action, qty, ticker in field rows', () => {
+    const texts = mountPanel().findAll('.field-value').map(v => v.text())
+    expect(texts).toContain('STO')
+    expect(texts).toContain('5')
+    expect(texts).toContain('SPY')
+  })
+
+  it('pre-fills strategy input with trade.strategy', () => {
+    const input = mountPanel().find('.strategy-input').element as HTMLInputElement
+    expect(input.value).toBe('CSP')
+  })
+
+  it('shows strike and expiry for options', () => {
+    const texts = mountPanel().findAll('.field-value').map(v => v.text())
+    expect(texts.some(t => t.includes('480'))).toBe(true)
+    expect(texts.some(t => t.includes('2024-12-20'))).toBe(true)
+  })
+
+  it('hides strike and expiry for stock trades', () => {
+    const stockTrade: ParsedTrade = {
+      action: 'BTO', qty: 100, ticker: 'NVDA',
+      instrumentType: 'STOCK', price: 820, cashFlow: -82000,
+      strategy: 'Long', valid: true,
+    }
+    const texts = mountPanel({ trade: stockTrade }).findAll('.field-value').map(v => v.text())
+    expect(texts.some(t => t.includes('480'))).toBe(false)
+  })
+
+  it('applies profit class to cash flow when positive', () => {
+    const rows = mountPanel().findAll('.field-row')
+    const cashRow = rows.find(r => r.text().includes('CASH FLOW'))
+    expect(cashRow?.find('.profit').exists()).toBe(true)
+  })
+
+  it('applies loss class to cash flow when negative', () => {
+    const trade = { ...mockTrade, cashFlow: -500, action: 'BTO' }
+    const rows = mountPanel({ trade }).findAll('.field-row')
+    const cashRow = rows.find(r => r.text().includes('CASH FLOW'))
+    expect(cashRow?.find('.loss').exists()).toBe(true)
+  })
+
+  it('hides save error when saveError prop is absent', () => {
+    expect(mountPanel().find('.save-error').exists()).toBe(false)
+  })
+
+  it('shows save error when saveError prop is provided', () => {
+    const wrapper = mountPanel({ trade: mockTrade, saveError: 'Network failure' })
+    expect(wrapper.find('.save-error').text()).toBe('Network failure')
+  })
+})
+
+describe('ConfirmPanel — emits', () => {
+  it('emits cancel when ✕ button clicked', async () => {
+    const wrapper = mountPanel()
+    await wrapper.find('.btn-close').trigger('click')
+    expect(wrapper.emitted('cancel')).toHaveLength(1)
+  })
+
+  it('emits cancel when Cancel button clicked', async () => {
+    const wrapper = mountPanel()
+    await wrapper.find('.btn-cancel').trigger('click')
+    expect(wrapper.emitted('cancel')).toHaveLength(1)
+  })
+
+  it('emits save with strategyTag and notes when Save Trade clicked', async () => {
+    const wrapper = mountPanel()
+    await wrapper.find('.strategy-input').setValue('MyStrategy')
+    await wrapper.find('.notes-textarea').setValue('some notes')
+    await wrapper.find('.btn-save').trigger('click')
+    const payload = wrapper.emitted('save')![0]![0] as { strategyTag: string; notes: string }
+    expect(payload.strategyTag).toBe('MyStrategy')
+    expect(payload.notes).toBe('some notes')
+  })
+
+  it('emits save with empty notes if none entered', async () => {
+    const wrapper = mountPanel()
+    await wrapper.find('.btn-save').trigger('click')
+    const payload = wrapper.emitted('save')![0]![0] as { strategyTag: string; notes: string }
+    expect(payload.notes).toBe('')
+  })
+})

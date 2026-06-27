@@ -3,10 +3,11 @@ import { ref } from 'vue'
 import { parseTrade } from '@/composables/useTradeParser'
 import type { ParsedTrade } from '@/types/index'
 
-const emit = defineEmits<{ parsed: [ParsedTrade] }>()
+const emit = defineEmits<{ parsed: [{ trade: ParsedTrade; rawInput: string }] }>()
 
-const rawInput = ref('')
-const error = ref('')
+const rawInput  = ref('')
+const error     = ref('')
+const flashing  = ref(false)
 
 function handleParse() {
   const result = parseTrade(rawInput.value)
@@ -14,15 +15,27 @@ function handleParse() {
     error.value = result.error ?? 'Could not parse trade input.'
   } else {
     error.value = ''
-    emit('parsed', result)
+    emit('parsed', { trade: result, rawInput: rawInput.value })
   }
 }
+
+function clearInput() {
+  rawInput.value = ''
+  error.value = ''
+}
+
+function triggerFlash() {
+  flashing.value = true
+  setTimeout(() => { flashing.value = false }, 600)
+}
+
+defineExpose({ triggerFlash, clearInput })
 </script>
 
 <template>
   <div class="trade-entry">
     <form @submit.prevent="handleParse" class="entry-form">
-      <div class="entry-wrap" :class="{ 'has-error': error }">
+      <div class="entry-wrap" :class="{ 'has-error': error, 'flash': flashing }">
         <span class="prompt">›</span>
         <input
           v-model="rawInput"
@@ -57,7 +70,7 @@ function handleParse() {
   position: relative;
   flex: 1;
   border-bottom: 1px solid var(--outline-variant);
-  transition: border-color 0.1s;
+  transition: border-color 0.1s, background 0.3s;
 }
 
 .entry-wrap:focus-within {
@@ -66,6 +79,10 @@ function handleParse() {
 
 .entry-wrap.has-error {
   border-color: var(--color-loss);
+}
+
+.entry-wrap.flash {
+  background: rgba(74, 225, 118, 0.06);
 }
 
 .prompt {

@@ -1,21 +1,49 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import TradeEntryBar from '@/components/campaign/TradeEntryBar.vue'
+import ConfirmPanel from '@/components/campaign/ConfirmPanel.vue'
 import PositionRow from '@/components/campaign/PositionRow.vue'
 import TradeRow from '@/components/campaign/TradeRow.vue'
-import { useRoute } from 'vue-router'
 import { useTradeLogStore } from '@/stores/tradeLog'
+import { saveTrade } from '@/services/tradeService'
+import { closeCampaign } from '@/services/campaignService'
 import { MOCK_PRICES } from '@/types/index'
-import type { ParsedTrade, Position, TradeLeg } from '@/types/index'
+import type { ParsedTrade } from '@/types/index'
 
 const route = useRoute()
 const store = useTradeLogStore()
 
-onMounted(() => store.fetchCampaigns())
+const loading         = ref(true)
+const saving          = ref(false)
+const parsedTrade     = ref<ParsedTrade | null>(null)
+const pendingRawInput = ref('')
+const panelError      = ref('')
+const entryBarRef     = ref<InstanceType<typeof TradeEntryBar> | null>(null)
 
-const campaign = computed(() =>
-  store.campaigns.find(c => c.id === Number(route.params.id))
-)
+const campaignId = computed(() => Number(route.params.id))
+
+onMounted(async () => {
+  const id = campaignId.value
+  await Promise.all([
+    store.fetchCampaign(id),
+    store.fetchTrades(id),
+    store.fetchPositions(id),
+  ])
+  loading.value = false
+})
+
+watch(campaignId, async (id) => {
+  loading.value = true
+  await Promise.all([
+    store.fetchCampaign(id),
+    store.fetchTrades(id),
+    store.fetchPositions(id),
+  ])
+  loading.value = false
+})
+
+const campaign = computed(() => store.currentCampaign)
 
 const mockPrice = computed(() =>
   campaign.value ? (MOCK_PRICES[campaign.value.ticker] ?? null) : null
@@ -27,95 +55,64 @@ const unrealizedPnl = computed(() => {
   return c.sharesHeld * ((MOCK_PRICES[c.ticker] ?? 0) - c.costBasis)
 })
 
+const netCashFlow = computed(() =>
+  store.trades.reduce((sum, t) => sum + t.netCashFlow, 0)
+)
+
 function formatCurrency(value: number | null | undefined): string {
   if (value == null) return '—'
   return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
 function formatSigned(value: number): string {
-  const sign = value >= 0 ? '+' : ''
-  return sign + formatCurrency(value)
+  return (value >= 0 ? '+' : '') + formatCurrency(value)
 }
 
-function onParsed(_trade: ParsedTrade) {
-  // Confirm Panel wired in T13
+function onParsed({ trade, rawInput }: { trade: ParsedTrade; rawInput: string }) {
+  parsedTrade.value = trade
+  pendingRawInput.value = rawInput
+  panelError.value = ''
 }
 
-const MOCK_POSITIONS: Position[] = [
-  {
-    id: 1,
-    campaignId: 1,
-    instrumentType: 'OPTION',
-    ticker: 'SPY',
-    optionType: 'PUT',
-    strike: 480,
-    expiry: '2024-12-20',
-    openAction: 'STO',
-    openQuantity: 5,
-    avgPrice: 2.35,
-    status: 'OPEN',
-    openedAt: '2024-11-01',
-  },
-  {
-    id: 2,
-    campaignId: 1,
-    instrumentType: 'OPTION',
-    ticker: 'SPY',
-    optionType: 'CALL',
-    strike: 510,
-    expiry: '2024-12-20',
-    openAction: 'STO',
-    openQuantity: 3,
-    avgPrice: 1.80,
-    status: 'OPEN',
-    openedAt: '2024-11-08',
-  },
-]
+async function onSave({ strategyTag, notes }: { strategyTag: string; notes: string }) {
+  if (saving.value) return
+  saving.value = true
+  panelError.value = ''
+  try {
+    await saveTrade({ campaignId: campaignId.value, rawInput: pendingRawInput.value, strategyTag, notes })
+    parsedTrade.value = null
+    entryBarRef.value?.triggerFlash()
+    entryBarRef.value?.clearInput()
+    const id = campaignId.value
+    await Promise.all([store.fetchCampaign(id), store.fetchTrades(id), store.fetchPositions(id)])
+  } catch (e) {
+    panelError.value = e instanceof Error ? e.message : 'Failed to save trade'
+  } finally {
+    saving.value = false
+  }
+}
 
-const MOCK_TRADES: TradeLeg[] = [
-  {
-    id: 1, tradeEntryId: 1, campaignId: 1,
-    instrumentType: 'OPTION', action: 'STO', ticker: 'SPY',
-    quantity: 5, price: 2.35, netCashFlow: 1175,
-    optionType: 'PUT', strike: 480, expiry: '2024-12-20',
-    tradedAt: '2024-11-01', strategyTag: 'CSP',
-  },
-  {
-    id: 2, tradeEntryId: 2, campaignId: 1,
-    instrumentType: 'OPTION', action: 'STO', ticker: 'SPY',
-    quantity: 3, price: 1.80, netCashFlow: 540,
-    optionType: 'CALL', strike: 510, expiry: '2024-12-20',
-    tradedAt: '2024-11-08', strategyTag: 'CC',
-  },
-  {
-    id: 3, tradeEntryId: 3, campaignId: 1,
-    instrumentType: 'OPTION', action: 'BTC', ticker: 'SPY',
-    quantity: 2, price: 0.50, netCashFlow: -100,
-    optionType: 'PUT', strike: 480, expiry: '2024-12-20',
-    tradedAt: '2024-11-15', strategyTag: 'CSP',
-  },
-  {
-    id: 4, tradeEntryId: 4, campaignId: 1,
-    instrumentType: 'OPTION', action: 'EXPIRED', ticker: 'SPY',
-    quantity: 1, price: 0, netCashFlow: 0,
-    optionType: 'CALL', strike: 510, expiry: '2024-12-20',
-    tradedAt: '2024-12-20', strategyTag: 'CC',
-  },
-  {
-    id: 5, tradeEntryId: 5, campaignId: 1,
-    instrumentType: 'STOCK', action: 'BTO', ticker: 'SPY',
-    quantity: 100, price: 498.50, netCashFlow: -49850,
-    tradedAt: '2024-12-20',
-  },
-]
+function onCancel() {
+  parsedTrade.value = null
+  panelError.value = ''
+  entryBarRef.value?.clearInput()
+}
 
-const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
+async function handleCloseCampaign() {
+  if (!campaign.value) return
+  try {
+    await closeCampaign(campaign.value.id)
+    await store.fetchCampaign(campaign.value.id)
+  } catch {
+    // badge stays unchanged; user can retry
+  }
+}
 </script>
 
 <template>
   <div class="campaign-detail">
 
-    <template v-if="store.loading && !campaign">
+    <template v-if="loading">
       <div class="state-msg">Loading…</div>
     </template>
 
@@ -124,9 +121,10 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
     </template>
 
     <template v-else>
+      <div v-if="store.error" class="fetch-error">{{ store.error }}</div>
+
       <div class="header">
 
-        <!-- Left column -->
         <div class="header-left">
           <div class="breadcrumb">
             <RouterLink to="/dashboard" class="breadcrumb-link">Dashboard</RouterLink>
@@ -137,18 +135,21 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
           <div class="title-row">
             <span class="ticker">{{ campaign.ticker }}</span>
             <span v-if="campaign.label" class="campaign-label">{{ campaign.label }}</span>
-            <span
-              class="badge"
-              :class="campaign.status === 'OPEN' ? 'badge-open' : 'badge-closed'"
-            >
+            <span class="badge" :class="campaign.status === 'OPEN' ? 'badge-open' : 'badge-closed'">
               {{ campaign.status === 'OPEN' ? 'ACTIVE' : 'CLOSED' }}
             </span>
+            <button
+              v-if="campaign.status === 'OPEN'"
+              class="btn-close-campaign"
+              @click="handleCloseCampaign"
+            >
+              Close Campaign
+            </button>
           </div>
 
           <div v-if="campaign.notes" class="notes">{{ campaign.notes }}</div>
         </div>
 
-        <!-- Stat strip -->
         <div class="stat-strip">
           <div class="stat">
             <div class="stat-label">COST BASIS</div>
@@ -160,19 +161,13 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
           </div>
           <div class="stat">
             <div class="stat-label">NET CASH</div>
-            <div
-              class="stat-value"
-              :class="campaign.netCashFlow >= 0 ? 'profit' : 'loss'"
-            >
+            <div class="stat-value" :class="campaign.netCashFlow >= 0 ? 'profit' : 'loss'">
               {{ formatSigned(campaign.netCashFlow) }}
             </div>
           </div>
           <div class="stat">
             <div class="stat-label">UNRLZ P&amp;L</div>
-            <div
-              class="stat-value"
-              :class="unrealizedPnl >= 0 ? 'profit' : 'loss'"
-            >
+            <div class="stat-value" :class="unrealizedPnl >= 0 ? 'profit' : 'loss'">
               {{ formatSigned(unrealizedPnl) }}
             </div>
           </div>
@@ -182,16 +177,15 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
           </div>
         </div>
 
-      </div><!-- end .header -->
+      </div>
 
-      <TradeEntryBar @parsed="onParsed" />
+      <TradeEntryBar ref="entryBarRef" @parsed="onParsed" />
 
-      <!-- Open Positions -->
-      <div v-if="MOCK_POSITIONS.length > 0" class="section positions-section">
+      <div v-if="store.positions.length > 0" class="section positions-section">
         <div class="section-label">
           <span class="dot">●</span>
           OPEN POSITIONS
-          <span class="count">({{ MOCK_POSITIONS.length }})</span>
+          <span class="count">({{ store.positions.length }})</span>
         </div>
         <table class="table">
           <thead>
@@ -205,16 +199,15 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
             </tr>
           </thead>
           <tbody>
-            <PositionRow v-for="pos in MOCK_POSITIONS" :key="pos.id" :position="pos" />
+            <PositionRow v-for="pos in store.positions" :key="pos.id" :position="pos" />
           </tbody>
         </table>
       </div>
 
-      <!-- Trade History -->
       <div class="section history-section">
         <div class="section-label">
           TRADE HISTORY
-          <span class="count">({{ MOCK_TRADES.length }})</span>
+          <span class="count">({{ store.trades.length }})</span>
         </div>
         <table class="table">
           <thead>
@@ -230,28 +223,33 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
             </tr>
           </thead>
           <tbody>
-            <TradeRow v-for="trade in MOCK_TRADES" :key="trade.id" :trade="trade" />
+            <TradeRow v-for="trade in store.trades" :key="trade.id" :trade="trade" />
           </tbody>
         </table>
         <div class="ncf-footer">
           <span class="ncf-label">NET CASH FLOW</span>
-          <span class="ncf-value" :class="mockNetCashFlow >= 0 ? 'profit' : 'loss'">
-            {{ formatSigned(mockNetCashFlow) }}
+          <span class="ncf-value" :class="netCashFlow >= 0 ? 'profit' : 'loss'">
+            {{ formatSigned(netCashFlow) }}
           </span>
         </div>
       </div>
 
-    </template><!-- end v-else -->
+      <ConfirmPanel
+        v-if="parsedTrade"
+        :trade="parsedTrade"
+        :save-error="panelError"
+        :saving="saving"
+        @save="onSave"
+        @cancel="onCancel"
+      />
 
+    </template>
   </div>
 </template>
 
 <style scoped>
-.campaign-detail {
-  min-height: 100%;
-}
+.campaign-detail { min-height: 100%; }
 
-/* ── Header ── */
 .header {
   display: flex;
   align-items: flex-start;
@@ -261,11 +259,8 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
   border-bottom: 1px solid var(--outline-variant);
 }
 
-.header-left {
-  flex: 1;
-}
+.header-left { flex: 1; }
 
-/* ── Breadcrumb ── */
 .breadcrumb {
   font-size: 11px;
   font-weight: 700;
@@ -274,24 +269,11 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
   margin-bottom: 8px;
 }
 
-.breadcrumb-link {
-  color: var(--on-surface-variant);
-  text-decoration: none;
-}
+.breadcrumb-link { color: var(--on-surface-variant); text-decoration: none; }
+.breadcrumb-link:hover { color: var(--on-surface); }
+.breadcrumb-sep { margin: 0 4px; }
+.breadcrumb-ticker { color: var(--on-surface); }
 
-.breadcrumb-link:hover {
-  color: var(--on-surface);
-}
-
-.breadcrumb-sep {
-  margin: 0 4px;
-}
-
-.breadcrumb-ticker {
-  color: var(--on-surface);
-}
-
-/* ── Title row ── */
 .title-row {
   display: flex;
   align-items: baseline;
@@ -315,7 +297,6 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
   color: var(--on-surface-variant);
 }
 
-/* ── Status badge ── */
 .badge {
   font-size: 11px;
   font-weight: 700;
@@ -338,7 +319,21 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
   border-color: var(--outline-variant);
 }
 
-/* ── Notes ── */
+.btn-close-campaign {
+  background: transparent;
+  border: 1px solid var(--outline-variant);
+  border-radius: 0;
+  color: var(--color-loss);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 10px;
+  cursor: pointer;
+  align-self: center;
+}
+
+.btn-close-campaign:hover { border-color: var(--color-loss); }
+
 .notes {
   font-size: 14px;
   font-weight: 400;
@@ -346,7 +341,6 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
   color: var(--on-surface-variant);
 }
 
-/* ── Stat strip ── */
 .stat-strip {
   display: flex;
   gap: 24px;
@@ -354,9 +348,7 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
   align-items: flex-start;
 }
 
-.stat {
-  text-align: right;
-}
+.stat { text-align: right; }
 
 .stat-label {
   font-size: 11px;
@@ -376,11 +368,9 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
   white-space: nowrap;
 }
 
-/* ── P&L colors ── */
 .profit { color: var(--color-profit); }
 .loss   { color: var(--color-loss); }
 
-/* ── State messages ── */
 .state-msg {
   padding: 40px 28px;
   font-family: var(--font-mono);
@@ -388,18 +378,17 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
   color: var(--on-surface-variant);
 }
 
-.state-msg--error {
+.state-msg--error { color: var(--color-loss); }
+
+.fetch-error {
+  padding: 8px 28px;
+  font-family: var(--font-mono);
+  font-size: 12px;
   color: var(--color-loss);
 }
 
-/* ── Sections ── */
-.section {
-  padding: 16px 28px 0;
-}
-
-.history-section {
-  padding-bottom: 40px;
-}
+.section { padding: 16px 28px 0; }
+.history-section { padding-bottom: 40px; }
 
 .section-label {
   font-size: 11px;
@@ -413,24 +402,12 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
   gap: 6px;
 }
 
-.dot {
-  color: var(--primary);
-}
+.dot   { color: var(--primary); }
+.count { color: var(--outline); font-weight: 400; }
 
-.count {
-  color: var(--outline);
-  font-weight: 400;
-}
+.table { width: 100%; border-collapse: collapse; }
 
-/* ── Tables ── */
-.table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.thead-row {
-  background: var(--surface-container-low);
-}
+.thead-row { background: var(--surface-container-low); }
 
 .th {
   padding: 0 10px;
@@ -445,7 +422,6 @@ const mockNetCashFlow = MOCK_TRADES.reduce((sum, t) => sum + t.netCashFlow, 0)
   vertical-align: middle;
 }
 
-/* ── Net Cash Flow footer ── */
 .ncf-footer {
   display: flex;
   justify-content: flex-end;
