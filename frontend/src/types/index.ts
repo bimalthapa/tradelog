@@ -74,6 +74,7 @@ export interface SaveTradeRequest {
   rawInput: string
   strategyTag?: string
   notes?: string
+  tradedAt?: string
 }
 
 export const MOCK_PRICES: Record<string, number> = {

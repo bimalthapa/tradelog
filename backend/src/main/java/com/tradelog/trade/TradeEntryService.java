@@ -63,7 +63,7 @@ public class TradeEntryService {
         leg.setOptionType(parsed.optionType());
         leg.setStrike(parsed.strike());
         leg.setExpiry(parsed.expiry());
-        leg.setTradedAt(LocalDate.now());
+        leg.setTradedAt(req.tradedAt() != null ? req.tradedAt() : LocalDate.now());
         TradeLeg savedLeg = tradeLegRepository.save(leg);
 
         positionService.applyLeg(savedLeg);

@@ -1,101 +1,317 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import type { ParsedTrade } from '@/types/index'
+import { ref, computed, watch } from 'vue'
+import type { ParsedTrade, Position } from '@/types/index'
 
-const props = defineProps<{ trade: ParsedTrade; saveError?: string; saving?: boolean }>()
+const props = defineProps<{
+  mode: 'parse' | 'close'
+  trade?: ParsedTrade
+  position?: Position
+  saveError?: string
+  saving?: boolean
+}>()
+
 const emit = defineEmits<{
-  save:   [{ strategyTag: string; notes: string }]
+  save: [{ strategyTag: string; notes: string; tradeDate: string; qty?: number; exitPrice?: number }]
   cancel: []
 }>()
 
-const strategyTag = ref(props.trade.strategy)
+const strategyTag = ref(props.trade?.strategy ?? '')
 const notes       = ref('')
+const tradeDate   = ref(todayDisplayDate())
+
+// Close mode state (used in Task 3)
+const closeQty    = ref(props.position?.openQuantity ?? 0)
+const exitPrice   = ref('')
 
 watch(() => props.trade, (t) => {
-  strategyTag.value = t.strategy
-  notes.value = ''
+  if (t) {
+    strategyTag.value = t.strategy
+    notes.value       = ''
+    tradeDate.value   = todayDisplayDate()
+  }
 })
+
+watch(() => props.position, (p) => {
+  if (p) {
+    closeQty.value  = p.openQuantity
+    exitPrice.value = ''
+    notes.value     = ''
+    tradeDate.value = todayDisplayDate()
+  }
+})
+
+const closeAction = computed(() => {
+  if (!props.position) return ''
+  return props.position.openAction === 'STO' ? 'BTC' : 'STC'
+})
+
+const closeStrategy = computed(() => {
+  if (!props.position) return ''
+  const { openAction, optionType } = props.position
+  if (openAction === 'STO' && optionType === 'PUT')  return 'CSP'
+  if (openAction === 'STO' && optionType === 'CALL') return 'CC'
+  if (openAction === 'BTO') return 'Long'
+  return ''
+})
+
+const closeCashFlow = computed((): number | null => {
+  const qty   = Number(closeQty.value)
+  const price = Number(exitPrice.value)
+  if (!qty || !price || !props.position) return null
+  const multiplier = props.position.instrumentType === 'OPTION' ? 100 : 1
+  return closeAction.value === 'BTC'
+    ? -(qty * price * multiplier)
+    :  (qty * price * multiplier)
+})
+
+function formatExpiry(iso: string): string {
+  const [, month, day] = iso.split('-')
+  return `${parseInt(month!)}/${parseInt(day!)}`
+}
+
+function todayDisplayDate(): string {
+  const d  = new Date()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}/${dd}/${d.getFullYear()}`
+}
+
+function toIsoDate(display: string): string {
+  const [mm, dd, yyyy] = display.split('/')
+  return `${yyyy ?? ''}-${(mm ?? '').padStart(2, '0')}-${(dd ?? '').padStart(2, '0')}`
+}
 
 function formatCurrency(value: number): string {
   return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
+
+function handleSave() {
+  if (props.mode === 'parse') {
+    emit('save', {
+      strategyTag: strategyTag.value,
+      notes:       notes.value,
+      tradeDate:   toIsoDate(tradeDate.value),
+    })
+  } else {
+    emit('save', {
+      strategyTag: closeStrategy.value,
+      notes:       notes.value,
+      tradeDate:   toIsoDate(tradeDate.value),
+      qty:         Number(closeQty.value),
+      exitPrice:   Number(exitPrice.value),
+    })
+  }
+}
 </script>
 
 <template>
-  <div class="confirm-panel">
-    <div class="panel-header">
-      <span class="panel-title">CONFIRM TRADE</span>
-      <button class="btn-close" @click="emit('cancel')" aria-label="Close">✕</button>
-    </div>
+  <div class="backdrop" @click.self="emit('cancel')">
+    <div class="dialog" role="dialog" :aria-label="mode === 'parse' ? 'Confirm trade' : 'Close position'">
 
-    <div class="panel-body">
-      <div class="field-row"><span class="field-label">ACTION</span><span class="field-value">{{ trade.action }}</span></div>
-      <div class="field-row"><span class="field-label">QTY</span><span class="field-value">{{ trade.qty }}</span></div>
-      <div class="field-row"><span class="field-label">TICKER</span><span class="field-value">{{ trade.ticker }}</span></div>
-      <div class="field-row"><span class="field-label">INSTRUMENT</span><span class="field-value">{{ trade.instrumentType }}</span></div>
-      <div v-if="trade.optionType" class="field-row"><span class="field-label">TYPE</span><span class="field-value">{{ trade.optionType }}</span></div>
-      <div v-if="trade.strike != null" class="field-row"><span class="field-label">STRIKE</span><span class="field-value">${{ trade.strike }}</span></div>
-      <div v-if="trade.expiry" class="field-row"><span class="field-label">EXPIRY</span><span class="field-value">{{ trade.expiry }}</span></div>
-      <div class="field-row"><span class="field-label">PRICE</span><span class="field-value">{{ formatCurrency(trade.price) }}</span></div>
-      <div class="field-row">
-        <span class="field-label">CASH FLOW</span>
-        <span class="field-value" :class="trade.cashFlow >= 0 ? 'profit' : 'loss'">
-          {{ trade.cashFlow >= 0 ? '+' : '' }}{{ formatCurrency(trade.cashFlow) }}
-        </span>
+      <div class="dialog-header">
+        <span class="dialog-title">{{ mode === 'parse' ? 'CONFIRM TRADE' : 'CLOSE POSITION' }}</span>
+        <button class="btn-x" @click="emit('cancel')" aria-label="Close">✕</button>
       </div>
 
-      <div class="divider" />
+      <div class="dialog-body">
 
-      <label class="input-label" for="strategy">STRATEGY</label>
-      <input
-        id="strategy"
-        v-model="strategyTag"
-        type="text"
-        class="strategy-input"
-        placeholder="CSP, CC, Long…"
-      />
+        <!-- Parse mode -->
+        <template v-if="mode === 'parse' && trade">
+          <div class="field-grid">
+            <div class="field-cell">
+              <span class="field-label">ACTION</span>
+              <span class="field-value">{{ trade.action }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">QTY</span>
+              <span class="field-value">{{ trade.qty }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">TICKER</span>
+              <span class="field-value">{{ trade.ticker }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">INSTRUMENT</span>
+              <span class="field-value">{{ trade.instrumentType }}</span>
+            </div>
+            <template v-if="trade.optionType">
+              <div class="field-cell">
+                <span class="field-label">STRIKE</span>
+                <span class="field-value">${{ trade.strike }}</span>
+              </div>
+              <div class="field-cell">
+                <span class="field-label">EXPIRY</span>
+                <span class="field-value">{{ trade.expiry }}</span>
+              </div>
+            </template>
+            <div class="field-cell">
+              <span class="field-label">PRICE</span>
+              <span class="field-value">{{ formatCurrency(trade.price) }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">CASH FLOW</span>
+              <span class="field-value" :class="trade.cashFlow >= 0 ? 'profit' : 'loss'">
+                {{ trade.cashFlow >= 0 ? '+' : '' }}{{ formatCurrency(trade.cashFlow) }}
+              </span>
+            </div>
+          </div>
 
-      <label class="input-label" for="notes">NOTES</label>
-      <textarea
-        id="notes"
-        v-model="notes"
-        class="notes-textarea"
-        rows="3"
-        placeholder="Optional notes…"
-      />
+          <div class="divider" />
 
-      <p v-if="saveError" class="save-error">{{ saveError }}</p>
-    </div>
+          <label class="input-label" for="trade-date">TRADE DATE</label>
+          <input
+            id="trade-date"
+            v-model="tradeDate"
+            type="text"
+            class="text-input"
+            placeholder="MM/DD/YYYY"
+          />
 
-    <div class="panel-footer">
-      <button class="btn-cancel" @click="emit('cancel')">Cancel</button>
-      <button class="btn-save" :disabled="saving" @click="emit('save', { strategyTag: strategyTag, notes: notes })">Save Trade</button>
+          <label class="input-label" for="strategy">STRATEGY</label>
+          <input
+            id="strategy"
+            v-model="strategyTag"
+            type="text"
+            class="text-input"
+            placeholder="CSP, CC, Long…"
+          />
+
+          <label class="input-label" for="notes">NOTES</label>
+          <textarea
+            id="notes"
+            v-model="notes"
+            class="notes-textarea"
+            rows="3"
+            placeholder="Optional notes…"
+          />
+        </template>
+
+        <!-- Close mode -->
+        <template v-else-if="mode === 'close' && position">
+          <div class="field-grid">
+            <div class="field-cell">
+              <span class="field-label">TICKER</span>
+              <span class="field-value">{{ position.ticker }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">INSTRUMENT</span>
+              <span class="field-value">{{ position.instrumentType }}</span>
+            </div>
+            <template v-if="position.instrumentType === 'OPTION'">
+              <div class="field-cell">
+                <span class="field-label">STRIKE</span>
+                <span class="field-value">${{ position.strike }}</span>
+              </div>
+              <div class="field-cell">
+                <span class="field-label">EXPIRY</span>
+                <span class="field-value">{{ formatExpiry(position.expiry!) }}</span>
+              </div>
+            </template>
+            <div class="field-cell">
+              <span class="field-label">ACTION</span>
+              <span class="field-value">{{ closeAction }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">STRATEGY</span>
+              <span class="field-value">{{ closeStrategy || '—' }}</span>
+            </div>
+          </div>
+
+          <div class="divider" />
+
+          <label class="input-label" for="close-qty">QTY</label>
+          <input
+            id="close-qty"
+            v-model="closeQty"
+            type="number"
+            min="1"
+            class="text-input"
+          />
+
+          <label class="input-label" for="exit-price">EXIT PRICE</label>
+          <input
+            id="exit-price"
+            v-model="exitPrice"
+            type="number"
+            min="0"
+            step="0.01"
+            class="text-input"
+            placeholder="0.00"
+          />
+
+          <div v-if="closeCashFlow !== null" class="field-cell" style="margin-top: 4px;">
+            <span class="field-label">CASH FLOW</span>
+            <span class="field-value" :class="closeCashFlow >= 0 ? 'profit' : 'loss'">
+              {{ closeCashFlow >= 0 ? '+' : '' }}{{ formatCurrency(closeCashFlow) }}
+            </span>
+          </div>
+
+          <div class="divider" />
+
+          <label class="input-label" for="close-trade-date">TRADE DATE</label>
+          <input
+            id="close-trade-date"
+            v-model="tradeDate"
+            type="text"
+            class="text-input"
+            placeholder="MM/DD/YYYY"
+          />
+
+          <label class="input-label" for="close-notes">NOTES</label>
+          <textarea
+            id="close-notes"
+            v-model="notes"
+            class="notes-textarea"
+            rows="3"
+            placeholder="Optional notes…"
+          />
+        </template>
+
+        <p v-if="saveError" class="save-error">{{ saveError }}</p>
+      </div>
+
+      <div class="dialog-footer">
+        <button class="btn-cancel" @click="emit('cancel')">Cancel</button>
+        <button class="btn-save" :disabled="saving" @click="handleSave">Save Trade</button>
+      </div>
+
     </div>
   </div>
 </template>
 
 <style scoped>
-.confirm-panel {
+.backdrop {
   position: fixed;
-  top: 0;
-  right: 0;
-  width: 340px;
-  height: 100vh;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade-in 0.15s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.dialog {
+  width: 480px;
   background: var(--surface-container-high);
-  border-left: 1px solid var(--outline-variant);
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--outline-variant);
   display: flex;
   flex-direction: column;
-  z-index: 100;
-  animation: slide-in 0.15s ease;
+  max-height: 90vh;
+  animation: scale-in 0.15s ease;
 }
 
-@keyframes slide-in {
-  from { transform: translateX(30px); opacity: 0; }
-  to   { transform: translateX(0);    opacity: 1; }
+@keyframes scale-in {
+  from { transform: scale(0.97); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
 }
 
-.panel-header {
+.dialog-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -104,14 +320,14 @@ function formatCurrency(value: number): string {
   flex-shrink: 0;
 }
 
-.panel-title {
+.dialog-title {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
   color: var(--on-surface-variant);
 }
 
-.btn-close {
+.btn-x {
   background: none;
   border: none;
   color: var(--on-surface-variant);
@@ -121,9 +337,9 @@ function formatCurrency(value: number): string {
   line-height: 1;
 }
 
-.btn-close:hover { color: var(--on-surface); }
+.btn-x:hover { color: var(--on-surface); }
 
-.panel-body {
+.dialog-body {
   flex: 1;
   overflow-y: auto;
   padding: 16px 20px;
@@ -132,10 +348,16 @@ function formatCurrency(value: number): string {
   gap: 8px;
 }
 
-.field-row {
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+
+.field-cell {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .field-label {
@@ -167,7 +389,7 @@ function formatCurrency(value: number): string {
   color: var(--on-surface-variant);
 }
 
-.strategy-input,
+.text-input,
 .notes-textarea {
   width: 100%;
   background: var(--surface-container);
@@ -182,7 +404,7 @@ function formatCurrency(value: number): string {
   resize: none;
 }
 
-.strategy-input:focus,
+.text-input:focus,
 .notes-textarea:focus { border-color: var(--primary); }
 
 .save-error {
@@ -192,7 +414,7 @@ function formatCurrency(value: number): string {
   margin: 0;
 }
 
-.panel-footer {
+.dialog-footer {
   display: flex;
   gap: 8px;
   padding: 16px 20px;

@@ -593,14 +593,14 @@ Reference prototypes: `/Users/bimalth/Downloads/design_handoff_tradelog/` (layou
 - Trade History table
 - Confirm Panel (slide-in overlay, 340px)
 
-### Screen 3: Confirm Panel (overlay on Campaign Detail)
-- Fixed right panel, 340px wide, full height
-- Slide in from right: `translateX(30px) → 0` + `opacity 0 → 1`, 0.15s ease
-- Header: "CONFIRM TRADE" + ✕ close
-- Key-value rows for each parsed field
-- Strategy dropdown + Notes textarea
-- Footer: Cancel (ghost) + "Save Trade" (primary) buttons
-- On save: green flash `rgba(74,225,118,0.06)` on entry bar background
+### Screen 3: Confirm Dialog (overlay on Campaign Detail)
+- Centered modal dialog, 480px wide; full-screen backdrop `rgba(0,0,0,0.5)`
+- Animation: `scale(0.97) → scale(1)` + `opacity 0 → 1`, 0.15s ease; clicking backdrop dismisses
+- Two modes: `parse` (from trade entry bar) and `close` (from position row close button)
+- **Parse mode** — Header: "CONFIRM TRADE" + ✕ close; 2-column grid of read-only parsed fields (ACTION/QTY, TICKER/INSTRUMENT, STRIKE/EXPIRY, PRICE/CASH FLOW); trade date input (plain text, defaults today); strategy input + notes textarea; Footer: Cancel (ghost) + "Save Trade" (primary)
+- **Close mode** — Header: "CLOSE POSITION" + ✕ close; 2-column grid of read-only position fields; editable QTY (pre-filled with open quantity); editable EXIT PRICE; live computed CASH FLOW; trade date + notes; same footer
+- On save (parse mode): green flash `rgba(74,225,118,0.06)` on entry bar background
+- `SaveTradeRequest` includes optional `tradedAt: LocalDate`; if null, backend defaults to `LocalDate.now()`
 
 ### Screen 4: New Campaign (`/campaigns/new`)
 - Max width 480px

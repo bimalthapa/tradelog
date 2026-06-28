@@ -9,7 +9,7 @@ import { useTradeLogStore } from '@/stores/tradeLog'
 import { saveTrade } from '@/services/tradeService'
 import { closeCampaign } from '@/services/campaignService'
 import { MOCK_PRICES } from '@/types/index'
-import type { ParsedTrade } from '@/types/index'
+import type { ParsedTrade, Position } from '@/types/index'
 
 const route = useRoute()
 const store = useTradeLogStore()
@@ -17,6 +17,7 @@ const store = useTradeLogStore()
 const loading         = ref(true)
 const saving          = ref(false)
 const parsedTrade     = ref<ParsedTrade | null>(null)
+const closingPosition = ref<Position | null>(null)
 const pendingRawInput = ref('')
 const panelError      = ref('')
 const entryBarRef     = ref<InstanceType<typeof TradeEntryBar> | null>(null)
@@ -74,15 +75,27 @@ function onParsed({ trade, rawInput }: { trade: ParsedTrade; rawInput: string })
   panelError.value = ''
 }
 
-async function onSave({ strategyTag, notes }: { strategyTag: string; notes: string }) {
+async function onSave({ strategyTag, notes, tradeDate, qty, exitPrice }: {
+  strategyTag: string; notes: string; tradeDate: string; qty?: number; exitPrice?: number
+}) {
   if (saving.value) return
   saving.value = true
   panelError.value = ''
+  const isClose = closingPosition.value != null
   try {
-    await saveTrade({ campaignId: campaignId.value, rawInput: pendingRawInput.value, strategyTag, notes })
-    parsedTrade.value = null
-    entryBarRef.value?.triggerFlash()
-    entryBarRef.value?.clearInput()
+    let rawInput: string
+    if (isClose && closingPosition.value && qty != null && exitPrice != null) {
+      rawInput = buildCloseRawInput(closingPosition.value, qty, exitPrice)
+    } else {
+      rawInput = pendingRawInput.value
+    }
+    await saveTrade({ campaignId: campaignId.value, rawInput, strategyTag, notes, tradedAt: tradeDate })
+    parsedTrade.value     = null
+    closingPosition.value = null
+    if (!isClose) {
+      entryBarRef.value?.triggerFlash()
+      entryBarRef.value?.clearInput()
+    }
     const id = campaignId.value
     await Promise.all([store.fetchCampaign(id), store.fetchTrades(id), store.fetchPositions(id)])
   } catch (e) {
@@ -93,9 +106,27 @@ async function onSave({ strategyTag, notes }: { strategyTag: string; notes: stri
 }
 
 function onCancel() {
-  parsedTrade.value = null
+  const wasClose        = closingPosition.value != null
+  parsedTrade.value     = null
+  closingPosition.value = null
+  panelError.value      = ''
+  if (!wasClose) entryBarRef.value?.clearInput()
+}
+
+function buildCloseRawInput(position: Position, qty: number, exitPrice: number): string {
+  const action = position.openAction === 'STO' ? 'BTC' : 'STC'
+  if (position.instrumentType === 'OPTION') {
+    const optChar = position.optionType === 'CALL' ? 'C' : 'P'
+    const [, month, day] = position.expiry!.split('-')
+    const expiry = `${parseInt(month!)}/${day!}`
+    return `${action} ${qty} ${position.ticker} ${position.strike}${optChar} ${expiry} @${exitPrice}`
+  }
+  return `STC ${qty} ${position.ticker} @${exitPrice}`
+}
+
+function onClosePosition(position: Position) {
+  closingPosition.value = position
   panelError.value = ''
-  entryBarRef.value?.clearInput()
 }
 
 async function handleCloseCampaign() {
@@ -196,10 +227,11 @@ async function handleCloseCampaign() {
               <th class="th">INSTRUMENT</th>
               <th class="th">AVG PRICE</th>
               <th class="th">STATUS</th>
+              <th class="th"></th>
             </tr>
           </thead>
           <tbody>
-            <PositionRow v-for="pos in store.positions" :key="pos.id" :position="pos" />
+            <PositionRow v-for="pos in store.positions" :key="pos.id" :position="pos" @close="onClosePosition" />
           </tbody>
         </table>
       </div>
@@ -243,7 +275,17 @@ async function handleCloseCampaign() {
 
       <ConfirmPanel
         v-if="parsedTrade"
+        mode="parse"
         :trade="parsedTrade"
+        :save-error="panelError"
+        :saving="saving"
+        @save="onSave"
+        @cancel="onCancel"
+      />
+      <ConfirmPanel
+        v-else-if="closingPosition"
+        mode="close"
+        :position="closingPosition"
         :save-error="panelError"
         :saving="saving"
         @save="onSave"

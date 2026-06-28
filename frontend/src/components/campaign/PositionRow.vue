@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { Position } from '@/types/index'
 
-defineProps<{ position: Position }>()
+const props = defineProps<{ position: Position }>()
+const emit  = defineEmits<{ close: [Position] }>()
 
 function formatExpiry(isoDate: string): string {
   const [, month, day] = isoDate.split('-')
@@ -30,6 +31,15 @@ function formatExpiry(isoDate: string): string {
       <span class="status" :class="position.status === 'OPEN' ? 'status-open' : 'status-closed'">
         {{ position.status }}
       </span>
+    </td>
+    <td class="cell">
+      <button
+        v-if="position.status === 'OPEN'"
+        class="btn-close-pos"
+        @click="emit('close', position)"
+      >
+        Close
+      </button>
     </td>
   </tr>
 </template>
@@ -83,4 +93,19 @@ function formatExpiry(isoDate: string): string {
 
 .status-open   { color: var(--primary); }
 .status-closed { color: var(--outline); }
+
+.btn-close-pos {
+  background: transparent;
+  border: 1px solid var(--outline-variant);
+  border-radius: 0;
+  color: var(--color-loss);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-close-pos:hover { border-color: var(--color-loss); }
 </style>

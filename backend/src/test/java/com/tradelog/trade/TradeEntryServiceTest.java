@@ -89,7 +89,7 @@ class TradeEntryServiceTest {
     void save_throwsNotFound_whenCampaignMissing() {
         when(campaignRepository.findById(99L)).thenReturn(Optional.empty());
 
-        SaveTradeRequest req = new SaveTradeRequest(99L, "STO 5 SPY 480P 12/20 @2.35", null, null);
+        SaveTradeRequest req = new SaveTradeRequest(99L, "STO 5 SPY 480P 12/20 @2.35", null, null, null);
 
         assertThatThrownBy(() -> service.save(req))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -101,7 +101,7 @@ class TradeEntryServiceTest {
         when(campaignRepository.findById(1L)).thenReturn(Optional.of(new Campaign()));
         when(parser.parse(any())).thenReturn(ParsedTradeInput.invalid("Unrecognized trade format"));
 
-        SaveTradeRequest req = new SaveTradeRequest(1L, "garbage input", null, null);
+        SaveTradeRequest req = new SaveTradeRequest(1L, "garbage input", null, null, null);
 
         assertThatThrownBy(() -> service.save(req))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -119,7 +119,7 @@ class TradeEntryServiceTest {
         TradeLeg fakeLeg = makeLeg(20L, 10L, 1L);
         when(tradeLegRepository.save(any())).thenReturn(fakeLeg);
 
-        SaveTradeRequest req = new SaveTradeRequest(1L, "STO 5 SPY 480P 12/20 @2.35", "CSP", null);
+        SaveTradeRequest req = new SaveTradeRequest(1L, "STO 5 SPY 480P 12/20 @2.35", "CSP", null, null);
         TradeLegResponse resp = service.save(req);
 
         verify(tradeEntryRepository).save(any(TradeEntry.class));
@@ -150,10 +150,45 @@ class TradeEntryServiceTest {
         when(tradeLegRepository.save(any())).thenReturn(makeLeg(20L, 10L, 1L));
 
         // strategyTag is null in request — should fall back to parsed.strategy() = "CSP"
-        SaveTradeRequest req = new SaveTradeRequest(1L, "STO 5 SPY 480P 12/20 @2.35", null, null);
+        SaveTradeRequest req = new SaveTradeRequest(1L, "STO 5 SPY 480P 12/20 @2.35", null, null, null);
         service.save(req);
 
         assertThat(entryCaptor.getValue().getStrategyTag()).isEqualTo("CSP");
+    }
+
+    @Test
+    void save_usesTradedAt_whenProvided() {
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(new Campaign()));
+        when(parser.parse(any())).thenReturn(validOptionParsed());
+
+        TradeEntry fakeEntry = makeEntry(10L, 1L, "CSP", null);
+        when(tradeEntryRepository.save(any())).thenReturn(fakeEntry);
+
+        ArgumentCaptor<TradeLeg> legCaptor = ArgumentCaptor.forClass(TradeLeg.class);
+        when(tradeLegRepository.save(legCaptor.capture())).thenReturn(makeLeg(20L, 10L, 1L));
+
+        LocalDate backDate = LocalDate.of(2026, 6, 25);
+        SaveTradeRequest req = new SaveTradeRequest(1L, "STO 5 SPY 480P 12/20 @2.35", null, null, backDate);
+        service.save(req);
+
+        assertThat(legCaptor.getValue().getTradedAt()).isEqualTo(backDate);
+    }
+
+    @Test
+    void save_defaultsToToday_whenTradedAtNull() {
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(new Campaign()));
+        when(parser.parse(any())).thenReturn(validOptionParsed());
+
+        TradeEntry fakeEntry = makeEntry(10L, 1L, "CSP", null);
+        when(tradeEntryRepository.save(any())).thenReturn(fakeEntry);
+
+        ArgumentCaptor<TradeLeg> legCaptor = ArgumentCaptor.forClass(TradeLeg.class);
+        when(tradeLegRepository.save(legCaptor.capture())).thenReturn(makeLeg(20L, 10L, 1L));
+
+        SaveTradeRequest req = new SaveTradeRequest(1L, "STO 5 SPY 480P 12/20 @2.35", null, null, null);
+        service.save(req);
+
+        assertThat(legCaptor.getValue().getTradedAt()).isEqualTo(LocalDate.now());
     }
 
     // ── listByCampaign() tests ────────────────────────────────────────────────
