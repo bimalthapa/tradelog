@@ -398,3 +398,25 @@ describe('close campaign button', () => {
     expect(getCampaign).toHaveBeenCalledTimes(2)
   })
 })
+
+// ── Trade History empty state ────────────────────────────────────────────────
+
+describe('trade history empty state', () => {
+  it('shows "No trades recorded yet" when trades list is empty', async () => {
+    vi.mocked(getCampaign).mockResolvedValue(mockCampaign)
+    vi.mocked(getTradesForCampaign).mockResolvedValue([])
+    vi.mocked(getPositionsForCampaign).mockResolvedValue([])
+    const wrapper = mountView()
+    await flushPromises()
+    const cell = wrapper.find('.empty-cell')
+    expect(cell.exists()).toBe(true)
+    expect(cell.text()).toBe('No trades recorded yet')
+  })
+
+  it('does not show empty cell when trades exist', async () => {
+    setupMocks()
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('.empty-cell').exists()).toBe(false)
+  })
+})

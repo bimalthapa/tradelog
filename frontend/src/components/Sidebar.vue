@@ -1,4 +1,11 @@
 <script setup lang="ts">
+import { useRoute } from 'vue-router'
+import { useTradeLogStore } from '@/stores/tradeLog'
+
+const route = useRoute()
+const store = useTradeLogStore()
+
+const isCurrentCampaign = (id: number) => route.params.id === String(id)
 </script>
 
 <template>
@@ -17,23 +24,35 @@
       </div>
     </nav>
 
-    <div class="campaign-section">
-      <div class="section-label">ACTIVE</div>
-      <div class="campaign-item">
-        <span class="status-dot active"></span>
-        <span class="campaign-ticker">NVDA</span>
+    <div class="campaigns-area">
+      <div v-if="store.activeCampaigns.length > 0" class="campaign-section">
+        <div class="section-label">ACTIVE</div>
+        <RouterLink
+          v-for="c in store.activeCampaigns"
+          :key="c.id"
+          :to="`/campaign/${c.id}`"
+          class="campaign-item"
+          :class="{ 'campaign-item--active': isCurrentCampaign(c.id) }"
+        >
+          <span class="status-dot active"></span>
+          <span class="campaign-ticker">{{ c.ticker }}</span>
+          <span v-if="c.label" class="campaign-item-label">{{ c.label }}</span>
+        </RouterLink>
       </div>
-      <div class="campaign-item">
-        <span class="status-dot active"></span>
-        <span class="campaign-ticker">SPY</span>
-      </div>
-    </div>
 
-    <div class="campaign-section">
-      <div class="section-label">CLOSED</div>
-      <div class="campaign-item">
-        <span class="status-dot closed"></span>
-        <span class="campaign-ticker">AAPL</span>
+      <div v-if="store.closedCampaigns.length > 0" class="campaign-section">
+        <div class="section-label">CLOSED</div>
+        <RouterLink
+          v-for="c in store.closedCampaigns"
+          :key="c.id"
+          :to="`/campaign/${c.id}`"
+          class="campaign-item"
+          :class="{ 'campaign-item--active': isCurrentCampaign(c.id) }"
+        >
+          <span class="status-dot closed"></span>
+          <span class="campaign-ticker">{{ c.ticker }}</span>
+          <span v-if="c.label" class="campaign-item-label">{{ c.label }}</span>
+        </RouterLink>
       </div>
     </div>
 
@@ -64,6 +83,7 @@
   align-items: center;
   gap: 8px;
   padding: 16px 16px 12px;
+  flex-shrink: 0;
 }
 
 .logo-icon {
@@ -87,6 +107,7 @@
 
 .nav {
   padding: 4px 0;
+  flex-shrink: 0;
 }
 
 .nav-item {
@@ -113,9 +134,16 @@
   color: var(--on-surface);
 }
 
+/* Campaigns area scrolls independently */
+.campaigns-area {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .campaign-section {
-  margin-top: 16px;
   padding-bottom: 8px;
+  margin-top: 16px;
 }
 
 .section-label {
@@ -130,12 +158,19 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 16px;
+  padding: 4px 16px 4px 14px;
   cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  border-left: 2px solid transparent;
 }
 
 .campaign-item:hover {
   background: var(--surface-container-low);
+}
+
+.campaign-item--active {
+  border-left-color: var(--primary);
 }
 
 .status-dot {
@@ -152,11 +187,21 @@
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--on-surface);
+  flex-shrink: 0;
+}
+
+.campaign-item-label {
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .new-campaign-wrapper {
-  margin-top: auto;
   padding: 12px;
+  flex-shrink: 0;
 }
 
 .new-campaign-btn {
@@ -180,5 +225,6 @@
   font-size: 12px;
   color: var(--on-surface-variant);
   padding: 8px 16px 12px;
+  flex-shrink: 0;
 }
 </style>

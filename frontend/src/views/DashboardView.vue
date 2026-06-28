@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Campaign } from '@/types/index'
 import { MOCK_PRICES } from '@/types/index'
@@ -8,8 +8,6 @@ import CampaignRow from '@/components/dashboard/CampaignRow.vue'
 
 const router = useRouter()
 const store  = useTradeLogStore()
-
-onMounted(() => store.fetchCampaigns())
 
 function unrealizedFor(c: Campaign): number {
   if (!c.sharesHeld || c.costBasis == null) return 0
@@ -94,13 +92,20 @@ const footerStats = computed(() => [
             </tr>
           </thead>
           <tbody>
-            <CampaignRow
-              v-for="c in store.activeCampaigns"
-              :key="c.id"
-              :campaign="c"
-              :unrealized-pnl="unrealizedFor(c)"
-              @select="onSelect"
-            />
+            <template v-if="store.activeCampaigns.length > 0">
+              <CampaignRow
+                v-for="c in store.activeCampaigns"
+                :key="c.id"
+                :campaign="c"
+                :unrealized-pnl="unrealizedFor(c)"
+                @select="onSelect"
+              />
+            </template>
+            <template v-else>
+              <tr>
+                <td :colspan="TABLE_COLS.length" class="empty-cell">No active campaigns</td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -119,13 +124,20 @@ const footerStats = computed(() => [
             </tr>
           </thead>
           <tbody>
-            <CampaignRow
-              v-for="c in store.closedCampaigns"
-              :key="c.id"
-              :campaign="c"
-              :unrealized-pnl="unrealizedFor(c)"
-              @select="onSelect"
-            />
+            <template v-if="store.closedCampaigns.length > 0">
+              <CampaignRow
+                v-for="c in store.closedCampaigns"
+                :key="c.id"
+                :campaign="c"
+                :unrealized-pnl="unrealizedFor(c)"
+                @select="onSelect"
+              />
+            </template>
+            <template v-else>
+              <tr>
+                <td :colspan="TABLE_COLS.length" class="empty-cell">No closed campaigns</td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -289,5 +301,13 @@ const footerStats = computed(() => [
 
 .state-msg--error {
   color: var(--color-loss);
+}
+
+.empty-cell {
+  padding: 12px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  text-align: center;
 }
 </style>

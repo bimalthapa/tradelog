@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
+import { useTradeLogStore } from '@/stores/tradeLog'
+
+const store = useTradeLogStore()
+onMounted(() => store.fetchCampaigns())
 </script>
 
 <template>

@@ -223,7 +223,14 @@ async function handleCloseCampaign() {
             </tr>
           </thead>
           <tbody>
-            <TradeRow v-for="trade in store.trades" :key="trade.id" :trade="trade" />
+            <template v-if="store.trades.length > 0">
+              <TradeRow v-for="trade in store.trades" :key="trade.id" :trade="trade" />
+            </template>
+            <template v-else>
+              <tr>
+                <td :colspan="8" class="empty-cell">No trades recorded yet</td>
+              </tr>
+            </template>
           </tbody>
         </table>
         <div class="ncf-footer">
@@ -443,5 +450,13 @@ async function handleCloseCampaign() {
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 700;
+}
+
+.empty-cell {
+  padding: 12px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  text-align: center;
 }
 </style>
