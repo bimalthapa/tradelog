@@ -43,13 +43,23 @@ defineExpose({ triggerFlash, clearInput })
           type="text"
           spellcheck="false"
           autocomplete="off"
-          placeholder="STO 5 SPY 480C 12/20 @2.35  ·  BTO 100 NVDA @820.00"
+          placeholder="Enter trade…"
           class="entry-input"
           aria-label="Trade input"
         />
       </div>
       <button type="submit" class="btn-parse">Parse →</button>
     </form>
+    <div class="syntax-strip">
+      <div class="syntax-row">
+        <span class="syntax-label">OPTIONS</span>
+        <span class="syntax-example">STO 5 SPY 480C 12/20 @2.35</span>
+      </div>
+      <div class="syntax-row">
+        <span class="syntax-label">STOCK</span>
+        <span class="syntax-example">BTO 100 NVDA @820.00</span>
+      </div>
+    </div>
     <p v-if="error" class="error-msg">{{ error }}</p>
   </div>
 </template>
@@ -142,5 +152,39 @@ defineExpose({ triggerFlash, clearInput })
   font-weight: 400;
   line-height: 16px;
   color: var(--color-loss);
+}
+
+.syntax-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 20px 0;
+}
+
+.syntax-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.syntax-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--on-surface-variant);
+  min-width: 60px;
+  opacity: 0.6;
+  user-select: none;
+}
+
+.syntax-example {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+  opacity: 0.5;
+  user-select: none;
 }
 </style>
