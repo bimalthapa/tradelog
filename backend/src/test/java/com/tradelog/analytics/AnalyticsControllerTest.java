@@ -42,8 +42,32 @@ class AnalyticsControllerTest {
     }
 
     @Test
+    void summary_withAccountIdParam_returnsZerosWithNoData() throws Exception {
+        mvc.perform(get("/api/v1/analytics/summary?accountId=1"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.totalPremium").value(0.0))
+           .andExpect(jsonPath("$.netOptionsPnl").value(0.0));
+    }
+
+    @Test
+    void summary_withUnassignedParam_returnsZerosWithNoData() throws Exception {
+        mvc.perform(get("/api/v1/analytics/summary?unassigned=true"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.totalPremium").value(0.0))
+           .andExpect(jsonPath("$.netOptionsPnl").value(0.0));
+    }
+
+    @Test
     void pnlByStrategy_returnsEmptyArrayWithNoTrades() throws Exception {
         mvc.perform(get("/api/v1/analytics/pnl-by-strategy"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$").isArray())
+           .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void pnlByStrategy_withAccountIdParam_returnsEmptyArray() throws Exception {
+        mvc.perform(get("/api/v1/analytics/pnl-by-strategy?accountId=1"))
            .andExpect(status().isOk())
            .andExpect(jsonPath("$").isArray())
            .andExpect(jsonPath("$").isEmpty());
@@ -57,5 +81,13 @@ class AnalyticsControllerTest {
            .andExpect(jsonPath("$.premium").isEmpty())
            .andExpect(jsonPath("$.optionsPnl").isArray())
            .andExpect(jsonPath("$.optionsPnl").isEmpty());
+    }
+
+    @Test
+    void cumulative_withUnassignedParam_returnsEmptySeries() throws Exception {
+        mvc.perform(get("/api/v1/analytics/cumulative?unassigned=true"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.premium").isArray())
+           .andExpect(jsonPath("$.premium").isEmpty());
     }
 }

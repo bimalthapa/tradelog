@@ -1,0 +1,6 @@
+CREATE TABLE account (
+  id    INTEGER PRIMARY KEY AUTOINCREMENT,
+  name  TEXT NOT NULL UNIQUE
+);
+
+ALTER TABLE campaign ADD COLUMN account_id INTEGER REFERENCES account(id);

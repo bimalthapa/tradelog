@@ -2,8 +2,10 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createCampaign } from '@/services/campaignService'
+import { useTradeLogStore } from '@/stores/tradeLog'
 
 const router = useRouter()
+const store = useTradeLogStore()
 
 const ticker      = ref('')
 const label       = ref('')
@@ -12,6 +14,9 @@ const notes       = ref('')
 const tickerError = ref('')
 const apiError    = ref('')
 const submitting  = ref(false)
+const selectedAccountId = ref<number | undefined>(
+  typeof store.selectedAccountId === 'number' ? store.selectedAccountId : undefined
+)
 
 function onTickerInput(e: Event) {
   ticker.value = (e.target as HTMLInputElement).value.toUpperCase().replace(/[^A-Z]/g, '')
@@ -35,6 +40,7 @@ async function onSubmit() {
       label: label.value.trim() || undefined,
       notes: notes.value.trim() || undefined,
       openedAt: startDate.value,
+      accountId: selectedAccountId.value,
     })
     router.push(`/campaign/${campaign.id}`)
   } catch (e) {
@@ -98,6 +104,17 @@ const SYNTAX_EXAMPLES = [
             placeholder="e.g. Wheel Strategy, Short Puts"
             autocomplete="off"
           />
+        </div>
+
+        <!-- Account -->
+        <div class="field">
+          <label class="field-label">ACCOUNT <span class="optional">(optional)</span></label>
+          <select v-model="selectedAccountId" class="input form-select">
+            <option :value="undefined">Unassigned</option>
+            <option v-for="account in store.accounts" :key="account.id" :value="account.id">
+              {{ account.name }}
+            </option>
+          </select>
         </div>
 
         <!-- Start Date -->
@@ -252,6 +269,13 @@ const SYNTAX_EXAMPLES = [
 
 .textarea {
   resize: vertical;
+}
+
+.form-select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  width: 200px;
 }
 
 /* ── Errors ── */

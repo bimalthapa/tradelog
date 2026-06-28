@@ -1,6 +1,8 @@
 package com.tradelog.campaign;
 
 import com.jayway.jsonpath.JsonPath;
+import com.tradelog.account.AccountRepository;
+import com.tradelog.account.Account;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +27,9 @@ class CampaignControllerTest {
     @Autowired
     WebApplicationContext ctx;
 
+    @Autowired
+    AccountRepository accountRepository;
+
     MockMvc mvc;
 
     @BeforeEach
@@ -46,7 +51,32 @@ class CampaignControllerTest {
            .andExpect(jsonPath("$.status").value("OPEN"))
            .andExpect(jsonPath("$.openedAt").value("2026-01-10"))
            .andExpect(jsonPath("$.netCashFlow").value(0.0))
-           .andExpect(jsonPath("$.openPositionCount").value(0));
+           .andExpect(jsonPath("$.openPositionCount").value(0))
+           .andExpect(jsonPath("$.accountId").value((Object) null));
+    }
+
+    @Test
+    void createCampaign_withAccountId_setsAccount() throws Exception {
+        Account account = accountRepository.save(new Account("Roth IRA"));
+
+        mvc.perform(post("/api/v1/campaigns")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"ticker":"NVDA","openedAt":"2026-01-10","accountId":%d}
+                        """.formatted(account.getId())))
+           .andExpect(status().isCreated())
+           .andExpect(jsonPath("$.accountId").value(account.getId().intValue()))
+           .andExpect(jsonPath("$.accountName").value("Roth IRA"));
+    }
+
+    @Test
+    void createCampaign_withUnknownAccountId_returns404() throws Exception {
+        mvc.perform(post("/api/v1/campaigns")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"ticker":"NVDA","openedAt":"2026-01-10","accountId":99999}
+                        """))
+           .andExpect(status().isNotFound());
     }
 
     @Test
@@ -93,6 +123,46 @@ class CampaignControllerTest {
     }
 
     @Test
+    void listCampaigns_filterByAccountId_returnsOnlyMatching() throws Exception {
+        Account account = accountRepository.save(new Account("IRA"));
+        int assignedId = createAndGetId("NVDA", "2026-01-01");
+        create("SPY", "2026-02-01");  // no account
+
+        mvc.perform(patch("/api/v1/campaigns/" + assignedId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"accountId":%d}
+                        """.formatted(account.getId())))
+           .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/campaigns?accountId=" + account.getId()))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$").isArray())
+           .andExpect(jsonPath("$.length()").value(1))
+           .andExpect(jsonPath("$[0].ticker").value("NVDA"));
+    }
+
+    @Test
+    void listCampaigns_filterUnassigned_returnsOnlyNullAccount() throws Exception {
+        Account account = accountRepository.save(new Account("IRA"));
+        int assignedId = createAndGetId("NVDA", "2026-01-01");
+        create("SPY", "2026-02-01");  // unassigned
+
+        mvc.perform(patch("/api/v1/campaigns/" + assignedId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"accountId":%d}
+                        """.formatted(account.getId())))
+           .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/campaigns?unassigned=true"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$").isArray())
+           .andExpect(jsonPath("$.length()").value(1))
+           .andExpect(jsonPath("$[0].ticker").value("SPY"));
+    }
+
+    @Test
     void getCampaign_returnsById() throws Exception {
         int id = createAndGetId("TSLA", "2026-01-15");
 
@@ -107,6 +177,66 @@ class CampaignControllerTest {
         mvc.perform(get("/api/v1/campaigns/99999"))
            .andExpect(status().isNotFound())
            .andExpect(jsonPath("$.error").exists());
+    }
+
+    @Test
+    void patchCampaign_assignAccount() throws Exception {
+        Account account = accountRepository.save(new Account("Taxable"));
+        int id = createAndGetId("AMD", "2026-01-01");
+
+        mvc.perform(patch("/api/v1/campaigns/" + id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"accountId":%d}
+                        """.formatted(account.getId())))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.accountId").value(account.getId().intValue()))
+           .andExpect(jsonPath("$.accountName").value("Taxable"));
+    }
+
+    @Test
+    void patchCampaign_clearAccount() throws Exception {
+        Account account = accountRepository.save(new Account("Taxable"));
+        int id = createAndGetId("AMD", "2026-01-01");
+
+        // first assign
+        mvc.perform(patch("/api/v1/campaigns/" + id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"accountId":%d}
+                        """.formatted(account.getId())))
+           .andExpect(status().isOk());
+
+        // then clear
+        mvc.perform(patch("/api/v1/campaigns/" + id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"clearAccount":true}
+                        """))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.accountId").value((Object) null));
+    }
+
+    @Test
+    void patchCampaign_returns404ForUnknownId() throws Exception {
+        mvc.perform(patch("/api/v1/campaigns/99999")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"accountId":1}
+                        """))
+           .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void patchCampaign_returns404ForUnknownAccountId() throws Exception {
+        int id = createAndGetId("NVDA", "2026-01-01");
+
+        mvc.perform(patch("/api/v1/campaigns/" + id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"accountId":99999}
+                        """))
+           .andExpect(status().isNotFound());
     }
 
     @Test

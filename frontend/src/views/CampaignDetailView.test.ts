@@ -288,7 +288,7 @@ describe('confirm panel', () => {
       trade: mockParsedTrade, rawInput: 'STO 5 SPY 480C 12/20 @2.35',
     })
     await nextTick()
-    expect(wrapper.find('.confirm-panel').exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'ConfirmPanel' }).exists()).toBe(true)
   })
 
   it('hides ConfirmPanel when panel emits cancel', async () => {
@@ -300,7 +300,7 @@ describe('confirm panel', () => {
     await nextTick()
     await wrapper.findComponent({ name: 'ConfirmPanel' }).vm.$emit('cancel')
     await nextTick()
-    expect(wrapper.find('.confirm-panel').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'ConfirmPanel' }).exists()).toBe(false)
   })
 
   it('calls saveTrade with correct args when panel emits save', async () => {
@@ -332,7 +332,7 @@ describe('confirm panel', () => {
     await nextTick()
     await wrapper.findComponent({ name: 'ConfirmPanel' }).vm.$emit('save', { strategyTag: 'CSP', notes: '' })
     await flushPromises()
-    expect(wrapper.find('.confirm-panel').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'ConfirmPanel' }).exists()).toBe(false)
   })
 
   it('re-fetches data after successful save', async () => {
@@ -361,7 +361,7 @@ describe('confirm panel', () => {
     await wrapper.findComponent({ name: 'ConfirmPanel' }).vm.$emit('save', { strategyTag: 'CSP', notes: '' })
     await flushPromises()
     // Panel should still be visible
-    expect(wrapper.find('.confirm-panel').exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'ConfirmPanel' }).exists()).toBe(true)
     // Error prop should be passed — check via the ConfirmPanel's saveError prop
     const panel = wrapper.findComponent({ name: 'ConfirmPanel' })
     expect(panel.props('saveError')).toBe('Server error')

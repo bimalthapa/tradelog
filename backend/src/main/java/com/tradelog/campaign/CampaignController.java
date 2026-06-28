@@ -2,6 +2,7 @@ package com.tradelog.campaign;
 
 import com.tradelog.campaign.dto.CampaignResponse;
 import com.tradelog.campaign.dto.CreateCampaignRequest;
+import com.tradelog.campaign.dto.UpdateCampaignRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -19,8 +20,10 @@ public class CampaignController {
     }
 
     @GetMapping
-    public List<CampaignResponse> listAll() {
-        return campaignService.listAll();
+    public List<CampaignResponse> listAll(
+            @RequestParam(required = false) Long accountId,
+            @RequestParam(required = false, defaultValue = "false") boolean unassigned) {
+        return campaignService.listFiltered(accountId, unassigned);
     }
 
     @GetMapping("/{id}")
@@ -32,6 +35,12 @@ public class CampaignController {
     @ResponseStatus(HttpStatus.CREATED)
     public CampaignResponse create(@Valid @RequestBody CreateCampaignRequest request) {
         return campaignService.create(request);
+    }
+
+    @PatchMapping("/{id}")
+    public CampaignResponse update(@PathVariable Long id,
+                                   @RequestBody UpdateCampaignRequest req) {
+        return campaignService.updateCampaign(id, req);
     }
 
     @PatchMapping("/{id}/close")

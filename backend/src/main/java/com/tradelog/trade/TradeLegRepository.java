@@ -30,6 +30,37 @@ public interface TradeLegRepository extends JpaRepository<TradeLeg, Long> {
     List<TradeLeg> findAllOptionLegsOrderedByDate();
 
     @Query("""
+        SELECT SUM(tl.netCashFlow) FROM TradeLeg tl, Campaign c
+        WHERE tl.campaignId = c.id
+          AND tl.instrumentType = 'OPTION' AND tl.netCashFlow > 0
+          AND (:unassigned = true  AND c.account IS NULL
+               OR :unassigned = false AND (:accountId IS NULL OR c.account.id = :accountId))
+        """)
+    Double findTotalPremiumFiltered(@Param("accountId") Long accountId,
+                                    @Param("unassigned") boolean unassigned);
+
+    @Query("""
+        SELECT SUM(tl.netCashFlow) FROM TradeLeg tl, Campaign c
+        WHERE tl.campaignId = c.id
+          AND tl.instrumentType = 'OPTION'
+          AND (:unassigned = true  AND c.account IS NULL
+               OR :unassigned = false AND (:accountId IS NULL OR c.account.id = :accountId))
+        """)
+    Double findNetOptionsPnlFiltered(@Param("accountId") Long accountId,
+                                     @Param("unassigned") boolean unassigned);
+
+    @Query("""
+        SELECT tl FROM TradeLeg tl, Campaign c
+        WHERE tl.campaignId = c.id
+          AND tl.instrumentType = 'OPTION'
+          AND (:unassigned = true  AND c.account IS NULL
+               OR :unassigned = false AND (:accountId IS NULL OR c.account.id = :accountId))
+        ORDER BY tl.tradedAt ASC
+        """)
+    List<TradeLeg> findAllOptionLegsFilteredByDate(@Param("accountId") Long accountId,
+                                                   @Param("unassigned") boolean unassigned);
+
+    @Query("""
         SELECT SUM(tl.netCashFlow) FROM TradeLeg tl
         WHERE tl.campaignId  = :campaignId
         AND   tl.ticker      = :ticker

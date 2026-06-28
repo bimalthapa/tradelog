@@ -14,6 +14,17 @@ function unrealizedFor(c: Campaign): number {
   return Math.round(c.sharesHeld * ((MOCK_PRICES[c.ticker] ?? 0) - c.costBasis))
 }
 
+function filterByAccount(items: Campaign[]): Campaign[] {
+  const sel = store.selectedAccountId
+  if (sel === 'all') return items
+  if (sel === null) return items.filter(c => !c.accountId)
+  return items.filter(c => c.accountId === sel)
+}
+
+const allFiltered    = computed(() => filterByAccount(store.campaigns))
+const filteredActive = computed(() => filterByAccount(store.activeCampaigns))
+const filteredClosed = computed(() => filterByAccount(store.closedCampaigns))
+
 function formatKpi(value: number): string {
   const sign = value >= 0 ? '+' : '-'
   return `${sign}$${Math.abs(value).toLocaleString()}`
@@ -29,13 +40,13 @@ const TABLE_COLS = [
 ]
 
 const totalUnrealized = computed(() =>
-  store.campaigns.reduce((sum, c) => sum + unrealizedFor(c), 0)
+  allFiltered.value.reduce((sum, c) => sum + unrealizedFor(c), 0)
 )
 const totalRealized = computed(() =>
-  store.campaigns.reduce((sum, c) => sum + (c.realizedPnl ?? 0), 0)
+  allFiltered.value.reduce((sum, c) => sum + (c.realizedPnl ?? 0), 0)
 )
 const totalNetCashFlow = computed(() =>
-  store.campaigns.reduce((sum, c) => sum + c.netCashFlow, 0)
+  allFiltered.value.reduce((sum, c) => sum + c.netCashFlow, 0)
 )
 
 const kpiStats = computed(() => [
@@ -45,8 +56,8 @@ const kpiStats = computed(() => [
 ])
 
 const footerStats = computed(() => [
-  { label: 'ACTIVE CAMPAIGNS', value: store.activeCampaigns.length },
-  { label: 'TOTAL CAMPAIGNS',  value: store.campaigns.length },
+  { label: 'ACTIVE CAMPAIGNS', value: filteredActive.value.length },
+  { label: 'TOTAL CAMPAIGNS',  value: allFiltered.value.length },
 ])
 </script>
 
@@ -82,7 +93,7 @@ const footerStats = computed(() => [
       <div class="section-head">
         <span class="dot dot-active">●</span>
         <span class="section-label">ACTIVE CAMPAIGNS</span>
-        <span class="section-count">({{ store.activeCampaigns.length }})</span>
+        <span class="section-count">({{ filteredActive.length }})</span>
       </div>
       <div class="table-wrap">
         <table class="table">
@@ -92,9 +103,9 @@ const footerStats = computed(() => [
             </tr>
           </thead>
           <tbody>
-            <template v-if="store.activeCampaigns.length > 0">
+            <template v-if="filteredActive.length > 0">
               <CampaignRow
-                v-for="c in store.activeCampaigns"
+                v-for="c in filteredActive"
                 :key="c.id"
                 :campaign="c"
                 :unrealized-pnl="unrealizedFor(c)"
@@ -114,7 +125,7 @@ const footerStats = computed(() => [
       <div class="section-head section-head--gap">
         <span class="dot dot-closed">●</span>
         <span class="section-label">CLOSED CAMPAIGNS</span>
-        <span class="section-count">({{ store.closedCampaigns.length }})</span>
+        <span class="section-count">({{ filteredClosed.length }})</span>
       </div>
       <div class="table-wrap">
         <table class="table">
@@ -124,9 +135,9 @@ const footerStats = computed(() => [
             </tr>
           </thead>
           <tbody>
-            <template v-if="store.closedCampaigns.length > 0">
+            <template v-if="filteredClosed.length > 0">
               <CampaignRow
-                v-for="c in store.closedCampaigns"
+                v-for="c in filteredClosed"
                 :key="c.id"
                 :campaign="c"
                 :unrealized-pnl="unrealizedFor(c)"

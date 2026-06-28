@@ -13,12 +13,12 @@ const mockTrade: ParsedTrade = {
 }
 
 function mountPanel(props: { trade: ParsedTrade; saveError?: string } = { trade: mockTrade }) {
-  return mount(ConfirmPanel, { props })
+  return mount(ConfirmPanel, { props: { mode: 'parse', ...props } })
 }
 
 describe('ConfirmPanel — rendering', () => {
   it('renders CONFIRM TRADE header', () => {
-    expect(mountPanel().find('.panel-title').text()).toBe('CONFIRM TRADE')
+    expect(mountPanel().find('.dialog-title').text()).toBe('CONFIRM TRADE')
   })
 
   it('displays action, qty, ticker in field rows', () => {
@@ -29,7 +29,7 @@ describe('ConfirmPanel — rendering', () => {
   })
 
   it('pre-fills strategy input with trade.strategy', () => {
-    const input = mountPanel().find('.strategy-input').element as HTMLInputElement
+    const input = mountPanel().find('input#strategy').element as HTMLInputElement
     expect(input.value).toBe('CSP')
   })
 
@@ -50,16 +50,16 @@ describe('ConfirmPanel — rendering', () => {
   })
 
   it('applies profit class to cash flow when positive', () => {
-    const rows = mountPanel().findAll('.field-row')
-    const cashRow = rows.find(r => r.text().includes('CASH FLOW'))
-    expect(cashRow?.find('.profit').exists()).toBe(true)
+    const cells = mountPanel().findAll('.field-cell')
+    const cashCell = cells.find(c => c.text().includes('CASH FLOW'))
+    expect(cashCell?.find('.profit').exists()).toBe(true)
   })
 
   it('applies loss class to cash flow when negative', () => {
     const trade = { ...mockTrade, cashFlow: -500, action: 'BTO' }
-    const rows = mountPanel({ trade }).findAll('.field-row')
-    const cashRow = rows.find(r => r.text().includes('CASH FLOW'))
-    expect(cashRow?.find('.loss').exists()).toBe(true)
+    const cells = mountPanel({ trade }).findAll('.field-cell')
+    const cashCell = cells.find(c => c.text().includes('CASH FLOW'))
+    expect(cashCell?.find('.loss').exists()).toBe(true)
   })
 
   it('hides save error when saveError prop is absent', () => {
@@ -75,7 +75,7 @@ describe('ConfirmPanel — rendering', () => {
 describe('ConfirmPanel — emits', () => {
   it('emits cancel when ✕ button clicked', async () => {
     const wrapper = mountPanel()
-    await wrapper.find('.btn-close').trigger('click')
+    await wrapper.find('.btn-x').trigger('click')
     expect(wrapper.emitted('cancel')).toHaveLength(1)
   })
 
@@ -87,7 +87,7 @@ describe('ConfirmPanel — emits', () => {
 
   it('emits save with strategyTag and notes when Save Trade clicked', async () => {
     const wrapper = mountPanel()
-    await wrapper.find('.strategy-input').setValue('MyStrategy')
+    await wrapper.find('input#strategy').setValue('MyStrategy')
     await wrapper.find('.notes-textarea').setValue('some notes')
     await wrapper.find('.btn-save').trigger('click')
     const payload = wrapper.emitted('save')![0]![0] as { strategyTag: string; notes: string }

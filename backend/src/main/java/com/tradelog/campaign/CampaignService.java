@@ -1,7 +1,10 @@
 package com.tradelog.campaign;
 
+import com.tradelog.account.Account;
+import com.tradelog.account.AccountRepository;
 import com.tradelog.campaign.dto.CampaignResponse;
 import com.tradelog.campaign.dto.CreateCampaignRequest;
+import com.tradelog.campaign.dto.UpdateCampaignRequest;
 import com.tradelog.common.exception.ResourceNotFoundException;
 import com.tradelog.position.PositionRepository;
 import com.tradelog.trade.TradeLegRepository;
@@ -17,22 +20,32 @@ public class CampaignService {
     private final CampaignRepository campaignRepository;
     private final TradeLegRepository tradeLegRepository;
     private final PositionRepository positionRepository;
+    private final AccountRepository accountRepository;
 
     public CampaignService(CampaignRepository campaignRepository,
                            TradeLegRepository tradeLegRepository,
-                           PositionRepository positionRepository) {
+                           PositionRepository positionRepository,
+                           AccountRepository accountRepository) {
         this.campaignRepository = campaignRepository;
         this.tradeLegRepository = tradeLegRepository;
         this.positionRepository = positionRepository;
+        this.accountRepository  = accountRepository;
     }
 
-    public List<CampaignResponse> listAll() {
-        return campaignRepository.findAllByOrderByOpenedAtDesc()
-                .stream()
-                .map(this::toResponse)
-                .toList();
+    @Transactional(readOnly = true)
+    public List<CampaignResponse> listFiltered(Long accountId, boolean unassigned) {
+        List<Campaign> campaigns;
+        if (unassigned) {
+            campaigns = campaignRepository.findUnassigned();
+        } else if (accountId != null) {
+            campaigns = campaignRepository.findByAccountId(accountId);
+        } else {
+            campaigns = campaignRepository.findAllByOrderByOpenedAtDesc();
+        }
+        return campaigns.stream().map(this::toResponse).toList();
     }
 
+    @Transactional(readOnly = true)
     public CampaignResponse getById(Long id) {
         Campaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Campaign not found: " + id));
@@ -46,8 +59,26 @@ public class CampaignService {
         campaign.setLabel(request.label());
         campaign.setNotes(request.notes());
         campaign.setOpenedAt(request.openedAt());
-        Campaign saved = campaignRepository.save(campaign);
-        return toResponse(saved);
+        if (request.accountId() != null) {
+            Account account = accountRepository.findById(request.accountId())
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + request.accountId()));
+            campaign.setAccount(account);
+        }
+        return toResponse(campaignRepository.save(campaign));
+    }
+
+    @Transactional
+    public CampaignResponse updateCampaign(Long id, UpdateCampaignRequest req) {
+        Campaign campaign = campaignRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Campaign not found: " + id));
+        if (req.isClearAccount()) {
+            campaign.setAccount(null);
+        } else if (req.getAccountId() != null) {
+            Account account = accountRepository.findById(req.getAccountId())
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + req.getAccountId()));
+            campaign.setAccount(account);
+        }
+        return toResponse(campaignRepository.save(campaign));
     }
 
     @Transactional
@@ -90,7 +121,9 @@ public class CampaignService {
                 netCashFlow,
                 costBasis,
                 sharesHeld > 0 ? (int) sharesHeld : null,
-                openPositionCount
+                openPositionCount,
+                campaign.getAccount() != null ? campaign.getAccount().getId() : null,
+                campaign.getAccount() != null ? campaign.getAccount().getName() : null
         );
     }
 }

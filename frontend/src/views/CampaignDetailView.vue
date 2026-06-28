@@ -138,6 +138,26 @@ async function handleCloseCampaign() {
     // badge stays unchanged; user can retry
   }
 }
+
+const editingAccount   = ref(false)
+const pendingAccountId = ref<number | undefined>(undefined)
+
+function startAccountEdit() {
+  pendingAccountId.value = store.currentCampaign?.accountId
+  editingAccount.value = true
+}
+
+async function saveAccount() {
+  if (!store.currentCampaign) return
+  try {
+    await store.assignAccount(
+      store.currentCampaign.id,
+      pendingAccountId.value ?? null
+    )
+  } finally {
+    editingAccount.value = false
+  }
+}
 </script>
 
 <template>
@@ -205,6 +225,29 @@ async function handleCloseCampaign() {
           <div class="stat">
             <div class="stat-label">CURR PRICE</div>
             <div class="stat-value">{{ formatCurrency(mockPrice) }}</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">ACCOUNT</div>
+            <template v-if="editingAccount">
+              <select
+                v-model="pendingAccountId"
+                class="account-select"
+                @change="saveAccount"
+              >
+                <option :value="undefined">Unassigned</option>
+                <option
+                  v-for="account in store.accounts"
+                  :key="account.id"
+                  :value="account.id"
+                >{{ account.name }}</option>
+              </select>
+            </template>
+            <template v-else>
+              <button class="account-value" @click="startAccountEdit">
+                {{ campaign.accountName ?? 'Unassigned' }}
+                <span class="edit-icon">✎</span>
+              </button>
+            </template>
           </div>
         </div>
 
@@ -500,5 +543,35 @@ async function handleCloseCampaign() {
   font-size: 12px;
   color: var(--on-surface-variant);
   text-align: center;
+}
+
+.account-value {
+  background: none;
+  border: none;
+  color: var(--on-surface);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.edit-icon {
+  color: var(--outline);
+  font-size: 11px;
+  opacity: 0;
+}
+.account-value:hover .edit-icon { opacity: 1; }
+.account-select {
+  background: var(--surface-container-low);
+  border: none;
+  border-bottom: 1px solid var(--primary);
+  color: var(--on-surface);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  border-radius: 0;
 }
 </style>

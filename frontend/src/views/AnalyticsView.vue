@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useTradeLogStore } from '@/stores/tradeLog'
 import BarChart  from '@/components/analytics/BarChart.vue'
 import LineChart from '@/components/analytics/LineChart.vue'
@@ -7,6 +7,10 @@ import LineChart from '@/components/analytics/LineChart.vue'
 const store = useTradeLogStore()
 
 onMounted(() => Promise.all([store.fetchCampaigns(), store.fetchAnalytics()]))
+
+watch(() => store.selectedAccountId, () => {
+  store.fetchAnalytics()
+})
 
 const summary = computed(() => store.analytics ?? {
   totalPremium: 0, netOptionsPnl: 0,

@@ -14,5 +14,7 @@ public record CampaignResponse(
     double netCashFlow,
     Double costBasis,
     Integer sharesHeld,
-    int openPositionCount
+    int openPositionCount,
+    Long accountId,
+    String accountName
 ) {}

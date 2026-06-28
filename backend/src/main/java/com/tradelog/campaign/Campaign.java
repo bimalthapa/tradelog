@@ -1,5 +1,6 @@
 package com.tradelog.campaign;
 
+import com.tradelog.account.Account;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 
@@ -10,6 +11,10 @@ public class Campaign {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id")
+    private Account account;
 
     @Column(nullable = false)
     private String ticker;
@@ -31,6 +36,8 @@ public class Campaign {
     private Double realizedPnl;
 
     public Long getId() { return id; }
+    public Account getAccount() { return account; }
+    public void setAccount(Account account) { this.account = account; }
     public String getTicker() { return ticker; }
     public void setTicker(String ticker) { this.ticker = ticker; }
     public String getLabel() { return label; }

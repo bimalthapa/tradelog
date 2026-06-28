@@ -1,3 +1,8 @@
+export interface Account {
+  id: number
+  name: string
+}
+
 export interface Campaign {
   id: number
   ticker: string
@@ -11,6 +16,8 @@ export interface Campaign {
   costBasis?: number
   sharesHeld?: number
   openPositionCount: number
+  accountId?: number
+  accountName?: string
 }
 
 export interface TradeLeg {
@@ -67,6 +74,7 @@ export interface CreateCampaignRequest {
   label?: string
   notes?: string
   openedAt: string
+  accountId?: number
 }
 
 export interface SaveTradeRequest {

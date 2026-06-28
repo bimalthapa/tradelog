@@ -10,5 +10,6 @@ public record CreateCampaignRequest(
     @NotBlank @Size(min = 1, max = 5) @Pattern(regexp = "[A-Z]+", message = "ticker must be 1–5 uppercase letters") String ticker,
     String label,
     String notes,
-    @NotNull LocalDate openedAt
+    @NotNull LocalDate openedAt,
+    Long accountId
 ) {}

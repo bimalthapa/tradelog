@@ -4,7 +4,10 @@ import Sidebar from '@/components/Sidebar.vue'
 import { useTradeLogStore } from '@/stores/tradeLog'
 
 const store = useTradeLogStore()
-onMounted(() => store.fetchCampaigns())
+onMounted(() => {
+  store.fetchCampaigns()
+  store.fetchAccounts()
+})
 </script>
 
 <template>

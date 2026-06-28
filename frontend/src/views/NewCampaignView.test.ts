@@ -15,6 +15,13 @@ vi.mock('@/services/campaignService', () => ({
   createCampaign: vi.fn(),
 }))
 
+vi.mock('@/stores/tradeLog', () => ({
+  useTradeLogStore: () => ({
+    accounts: [],
+    selectedAccountId: 'all',
+  }),
+}))
+
 import { createCampaign } from '@/services/campaignService'
 
 const mockCampaign: Campaign = {

@@ -29,28 +29,28 @@ public class AnalyticsService {
         this.campaignRepo   = campaignRepo;
     }
 
-    public AnalyticsSummaryResponse getSummary() {
-        Double raw1 = tradeLegRepo.findTotalPremium();
-        Double raw2 = tradeLegRepo.findNetOptionsPnl();
+    public AnalyticsSummaryResponse getSummary(Long accountId, boolean unassigned) {
+        Double raw1 = tradeLegRepo.findTotalPremiumFiltered(accountId, unassigned);
+        Double raw2 = tradeLegRepo.findNetOptionsPnlFiltered(accountId, unassigned);
         return new AnalyticsSummaryResponse(
             raw1 != null ? raw1 : 0.0,
             raw2 != null ? raw2 : 0.0,
-            computeCampaignWinRate(),
-            computeTradeWinRate(),
+            computeCampaignWinRate(accountId, unassigned),
+            computeTradeWinRate(accountId, unassigned),
             tradeEntryRepo.findTotalCount()
         );
     }
 
-    public List<PnlByStrategyItem> getPnlByStrategy() {
-        return tradeEntryRepo.findPnlByStrategy().stream()
+    public List<PnlByStrategyItem> getPnlByStrategy(Long accountId, boolean unassigned) {
+        return tradeEntryRepo.findPnlByStrategyFiltered(accountId, unassigned).stream()
             .map(row -> new PnlByStrategyItem(
                 (String) row[0],
                 ((Number) row[1]).doubleValue()))
             .toList();
     }
 
-    public CumulativeResponse getCumulative() {
-        List<TradeLeg> legs = tradeLegRepo.findAllOptionLegsOrderedByDate();
+    public CumulativeResponse getCumulative(Long accountId, boolean unassigned) {
+        List<TradeLeg> legs = tradeLegRepo.findAllOptionLegsFilteredByDate(accountId, unassigned);
         TreeMap<String, Double> premiumMap = new TreeMap<>();
         TreeMap<String, Double> pnlMap     = new TreeMap<>();
 
@@ -75,8 +75,8 @@ public class AnalyticsService {
         return result;
     }
 
-    private double computeCampaignWinRate() {
-        List<Long> closedIds = campaignRepo.findAllClosedCampaignIds();
+    private double computeCampaignWinRate(Long accountId, boolean unassigned) {
+        List<Long> closedIds = campaignRepo.findClosedCampaignIdsFiltered(accountId, unassigned);
         if (closedIds.isEmpty()) return 0.0;
         long wins = closedIds.stream().filter(id -> {
             Double ncf = tradeLegRepo.findNetCashFlowByCampaignId(id);
@@ -85,8 +85,18 @@ public class AnalyticsService {
         return (double) wins / closedIds.size();
     }
 
-    private double computeTradeWinRate() {
-        List<Position> closed = positionRepo.findClosedOptionPositions();
+    private double computeTradeWinRate(Long accountId, boolean unassigned) {
+        List<Long> campaignIds;
+        if (unassigned) {
+            campaignIds = campaignRepo.findClosedCampaignIdsFiltered(null, true);
+        } else if (accountId != null) {
+            campaignIds = campaignRepo.findClosedCampaignIdsFiltered(accountId, false);
+        } else {
+            campaignIds = campaignRepo.findAllClosedCampaignIds();
+        }
+        List<Position> closed = positionRepo.findClosedOptionPositions().stream()
+            .filter(p -> campaignIds.contains(p.getCampaignId()))
+            .toList();
         if (closed.isEmpty()) return 0.0;
         long wins = closed.stream().filter(p -> {
             Double ncf = tradeLegRepo.findNetCashFlowByOptionPositionKey(

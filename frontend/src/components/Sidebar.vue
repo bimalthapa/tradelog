@@ -1,11 +1,24 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTradeLogStore } from '@/stores/tradeLog'
+import type { Campaign } from '@/types/index'
+import AccountSelector from './sidebar/AccountSelector.vue'
 
 const route = useRoute()
 const store = useTradeLogStore()
 
 const isCurrentCampaign = (id: number) => route.params.id === String(id)
+
+function filterByAccount(campaigns: Campaign[]) {
+  const sel = store.selectedAccountId
+  if (sel === 'all') return campaigns
+  if (sel === null) return campaigns.filter(c => !c.accountId)
+  return campaigns.filter(c => c.accountId === sel)
+}
+
+const activeCampaigns = computed(() => filterByAccount(store.activeCampaigns))
+const closedCampaigns = computed(() => filterByAccount(store.closedCampaigns))
 </script>
 
 <template>
@@ -24,11 +37,13 @@ const isCurrentCampaign = (id: number) => route.params.id === String(id)
       </div>
     </nav>
 
+    <AccountSelector />
+
     <div class="campaigns-area">
-      <div v-if="store.activeCampaigns.length > 0" class="campaign-section">
+      <div v-if="activeCampaigns.length > 0" class="campaign-section">
         <div class="section-label">ACTIVE</div>
         <RouterLink
-          v-for="c in store.activeCampaigns"
+          v-for="c in activeCampaigns"
           :key="c.id"
           :to="`/campaign/${c.id}`"
           class="campaign-item"
@@ -40,10 +55,10 @@ const isCurrentCampaign = (id: number) => route.params.id === String(id)
         </RouterLink>
       </div>
 
-      <div v-if="store.closedCampaigns.length > 0" class="campaign-section">
+      <div v-if="closedCampaigns.length > 0" class="campaign-section">
         <div class="section-label">CLOSED</div>
         <RouterLink
-          v-for="c in store.closedCampaigns"
+          v-for="c in closedCampaigns"
           :key="c.id"
           :to="`/campaign/${c.id}`"
           class="campaign-item"

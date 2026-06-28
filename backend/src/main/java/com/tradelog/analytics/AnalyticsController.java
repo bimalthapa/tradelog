@@ -16,17 +16,23 @@ public class AnalyticsController {
     }
 
     @GetMapping("/summary")
-    public AnalyticsSummaryResponse getSummary() {
-        return analyticsService.getSummary();
+    public AnalyticsSummaryResponse getSummary(
+        @RequestParam(required = false) Long accountId,
+        @RequestParam(required = false, defaultValue = "false") boolean unassigned) {
+        return analyticsService.getSummary(accountId, unassigned);
     }
 
     @GetMapping("/pnl-by-strategy")
-    public List<PnlByStrategyItem> getPnlByStrategy() {
-        return analyticsService.getPnlByStrategy();
+    public List<PnlByStrategyItem> getPnlByStrategy(
+        @RequestParam(required = false) Long accountId,
+        @RequestParam(required = false, defaultValue = "false") boolean unassigned) {
+        return analyticsService.getPnlByStrategy(accountId, unassigned);
     }
 
     @GetMapping("/cumulative")
-    public CumulativeResponse getCumulative() {
-        return analyticsService.getCumulative();
+    public CumulativeResponse getCumulative(
+        @RequestParam(required = false) Long accountId,
+        @RequestParam(required = false, defaultValue = "false") boolean unassigned) {
+        return analyticsService.getCumulative(accountId, unassigned);
     }
 }
