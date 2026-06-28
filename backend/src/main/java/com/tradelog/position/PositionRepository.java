@@ -20,4 +20,7 @@ public interface PositionRepository extends JpaRepository<Position, Long> {
     Optional<Position> findOpenOptionPosition(@Param("campaignId") Long campaignId, @Param("ticker") String ticker, @Param("optionType") String optionType, @Param("strike") Double strike, @Param("expiry") LocalDate expiry);
 
     List<Position> findByCampaignId(Long campaignId);
+
+    @Query("SELECT p FROM Position p WHERE p.status = 'CLOSED' AND p.instrumentType = 'OPTION'")
+    List<Position> findClosedOptionPositions();
 }

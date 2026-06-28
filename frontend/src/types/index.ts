@@ -83,3 +83,26 @@ export const MOCK_PRICES: Record<string, number> = {
   AAPL: 185.92,
   AMD:  165.44,
 }
+
+export interface AnalyticsSummary {
+  totalPremium:    number
+  netOptionsPnl:   number
+  campaignWinRate: number
+  tradeWinRate:    number
+  totalTrades:     number
+}
+
+export interface PnlItem {
+  label: string
+  value: number
+}
+
+export interface MonthPoint {
+  month: string
+  value: number
+}
+
+export interface CumulativeData {
+  premium:    MonthPoint[]
+  optionsPnl: MonthPoint[]
+}
