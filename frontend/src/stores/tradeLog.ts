@@ -22,6 +22,7 @@ export const useTradeLogStore = defineStore('tradeLog', () => {
 
   const activeCampaigns = computed(() => campaigns.value.filter(c => c.status === 'OPEN'))
   const closedCampaigns = computed(() => campaigns.value.filter(c => c.status === 'CLOSED'))
+  const openPositions   = computed(() => positions.value.filter(p => p.status === 'OPEN'))
 
   async function fetchCampaigns(): Promise<void> {
     loading.value = true
@@ -124,7 +125,7 @@ export const useTradeLogStore = defineStore('tradeLog', () => {
     campaigns, currentCampaign, trades, positions,
     analytics, pnlByStrategy, cumulativeData,
     loading, error,
-    activeCampaigns, closedCampaigns,
+    activeCampaigns, closedCampaigns, openPositions,
     accounts, selectedAccountId,
     fetchCampaigns, fetchCampaign, fetchTrades, fetchPositions, fetchAnalytics,
     fetchAccounts, setSelectedAccount,

@@ -255,11 +255,11 @@ async function saveAccount() {
 
       <TradeEntryBar ref="entryBarRef" @parsed="onParsed" />
 
-      <div v-if="store.positions.length > 0" class="section positions-section">
+      <div v-if="store.openPositions.length > 0" class="section positions-section">
         <div class="section-label">
           <span class="dot">●</span>
           OPEN POSITIONS
-          <span class="count">({{ store.positions.length }})</span>
+          <span class="count">({{ store.openPositions.length }})</span>
         </div>
         <table class="table">
           <thead>
@@ -274,7 +274,7 @@ async function saveAccount() {
             </tr>
           </thead>
           <tbody>
-            <PositionRow v-for="pos in store.positions" :key="pos.id" :position="pos" @close="onClosePosition" />
+            <PositionRow v-for="pos in store.openPositions" :key="pos.id" :position="pos" @close="onClosePosition" />
           </tbody>
         </table>
       </div>
