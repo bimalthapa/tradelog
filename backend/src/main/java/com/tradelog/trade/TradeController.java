@@ -4,6 +4,7 @@ import com.tradelog.trade.dto.ParseTradeRequest;
 import com.tradelog.trade.dto.ParseTradeResponse;
 import com.tradelog.trade.dto.SaveTradeRequest;
 import com.tradelog.trade.dto.TradeLegResponse;
+import com.tradelog.trade.dto.UpdateTradeRequest;
 import com.tradelog.trade.parser.ParsedTradeInput;
 import com.tradelog.trade.parser.TradeInputParser;
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +34,11 @@ public class TradeController {
     @PostMapping
     public TradeLegResponse save(@RequestBody SaveTradeRequest req) {
         return tradeEntryService.save(req);
+    }
+
+    @PatchMapping("/{id}")
+    public TradeLegResponse update(@PathVariable Long id, @RequestBody UpdateTradeRequest req) {
+        return tradeEntryService.update(id, req);
     }
 
     @GetMapping

@@ -1,10 +1,13 @@
 package com.tradelog.trade;
 
+import com.tradelog.campaign.Campaign;
 import com.tradelog.campaign.CampaignRepository;
+import com.tradelog.common.exception.BadRequestException;
 import com.tradelog.common.exception.ResourceNotFoundException;
 import com.tradelog.position.PositionService;
 import com.tradelog.trade.dto.SaveTradeRequest;
 import com.tradelog.trade.dto.TradeLegResponse;
+import com.tradelog.trade.dto.UpdateTradeRequest;
 import com.tradelog.trade.parser.ParsedTradeInput;
 import com.tradelog.trade.parser.TradeInputParser;
 import org.springframework.stereotype.Service;
@@ -79,6 +82,56 @@ public class TradeEntryService {
                     return toResponse(leg, entry);
                 })
                 .toList();
+    }
+
+    @Transactional
+    public TradeLegResponse update(Long legId, UpdateTradeRequest req) {
+        TradeLeg leg = tradeLegRepository.findById(legId)
+            .orElseThrow(() -> new ResourceNotFoundException("Trade not found: " + legId));
+
+        Campaign campaign = campaignRepository.findById(leg.getCampaignId())
+            .orElseThrow(() -> new ResourceNotFoundException("Campaign not found"));
+        if (!"OPEN".equals(campaign.getStatus())) {
+            throw new BadRequestException("Cannot edit trades in a closed campaign");
+        }
+
+        TradeEntry entry = tradeEntryRepository.findById(leg.getTradeEntryId())
+            .orElseThrow(() -> new ResourceNotFoundException("Trade entry not found"));
+
+        boolean positionsAffected = req.quantity() != null || req.price() != null || req.tradedAt() != null;
+
+        if (req.quantity() != null) {
+            if (req.quantity() < 1) throw new BadRequestException("Quantity must be ≥ 1");
+            leg.setQuantity(req.quantity());
+        }
+        if (req.price() != null) {
+            if (req.price() <= 0) throw new BadRequestException("Price must be > 0");
+            leg.setPrice(req.price());
+        }
+        if (req.tradedAt() != null) leg.setTradedAt(req.tradedAt());
+
+        if (req.quantity() != null || req.price() != null) {
+            double qty = req.quantity() != null ? req.quantity() : leg.getQuantity();
+            double price = req.price() != null ? req.price() : leg.getPrice();
+            double cashFlow = "STOCK".equals(leg.getInstrumentType()) ? qty * price : qty * price * 100;
+            String action = leg.getAction();
+            if ("BTO".equals(action) || "BTC".equals(action) || "ASSIGNED".equals(action)) {
+                cashFlow = -cashFlow;
+            }
+            leg.setNetCashFlow(cashFlow);
+        }
+
+        if (req.strategyTag() != null) entry.setStrategyTag(req.strategyTag());
+        if (req.notes() != null) entry.setNotes(req.notes());
+
+        tradeLegRepository.save(leg);
+        tradeEntryRepository.save(entry);
+
+        if (positionsAffected) {
+            positionService.rebuildPositions(leg.getCampaignId());
+        }
+
+        return toResponse(leg, entry);
     }
 
     private TradeLegResponse toResponse(TradeLeg leg, TradeEntry entry) {

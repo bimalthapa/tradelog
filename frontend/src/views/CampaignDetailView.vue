@@ -7,9 +7,9 @@ import PositionRow from '@/components/campaign/PositionRow.vue'
 import TradeRow from '@/components/campaign/TradeRow.vue'
 import { useTradeLogStore } from '@/stores/tradeLog'
 import { usePriceStore } from '@/stores/priceStore'
-import { saveTrade } from '@/services/tradeService'
+import { saveTrade, updateTrade } from '@/services/tradeService'
 import { closeCampaign } from '@/services/campaignService'
-import type { ParsedTrade, Position } from '@/types/index'
+import type { ParsedTrade, Position, TradeLeg, UpdateTradeRequest } from '@/types/index'
 
 const route      = useRoute()
 const store      = useTradeLogStore()
@@ -22,6 +22,10 @@ const closingPosition = ref<Position | null>(null)
 const pendingRawInput = ref('')
 const panelError      = ref('')
 const entryBarRef     = ref<InstanceType<typeof TradeEntryBar> | null>(null)
+
+const editingTrade = ref<TradeLeg | null>(null)
+const notesTrade   = ref<TradeLeg | null>(null)
+const notesText    = ref('')
 
 const campaignId = computed(() => Number(route.params.id))
 
@@ -88,6 +92,19 @@ async function onSave({ strategyTag, notes, tradeDate, qty, exitPrice }: {
   panelError.value = ''
   const isClose = closingPosition.value != null
   try {
+    if (editingTrade.value) {
+      const payload: UpdateTradeRequest = {}
+      if (qty !== undefined)      payload.quantity    = qty
+      if (exitPrice !== undefined) payload.price      = exitPrice
+      if (tradeDate)               payload.tradedAt   = tradeDate
+      if (strategyTag !== undefined) payload.strategyTag = strategyTag
+      if (notes !== undefined)     payload.notes      = notes
+      await updateTrade(editingTrade.value.id, payload)
+      editingTrade.value = null
+      const id = campaignId.value
+      await Promise.all([store.fetchCampaign(id), store.fetchTrades(id), store.fetchPositions(id)])
+      return
+    }
     let rawInput: string
     if (isClose && closingPosition.value && qty != null && exitPrice != null) {
       rawInput = buildCloseRawInput(closingPosition.value, qty, exitPrice)
@@ -112,10 +129,12 @@ async function onSave({ strategyTag, notes, tradeDate, qty, exitPrice }: {
 
 function onCancel() {
   const wasClose        = closingPosition.value != null
+  const wasEdit         = editingTrade.value != null
   parsedTrade.value     = null
   closingPosition.value = null
+  editingTrade.value    = null
   panelError.value      = ''
-  if (!wasClose) entryBarRef.value?.clearInput()
+  if (!wasClose && !wasEdit) entryBarRef.value?.clearInput()
 }
 
 function buildCloseRawInput(position: Position, qty: number, exitPrice: number): string {
@@ -130,8 +149,33 @@ function buildCloseRawInput(position: Position, qty: number, exitPrice: number):
 }
 
 function onClosePosition(position: Position) {
+  editingTrade.value    = null
   closingPosition.value = position
-  panelError.value = ''
+  panelError.value      = ''
+}
+
+function onEditTrade(trade: TradeLeg) {
+  parsedTrade.value     = null
+  closingPosition.value = null
+  editingTrade.value    = trade
+  panelError.value      = ''
+}
+
+function onNotesTrade(trade: TradeLeg) {
+  notesTrade.value  = trade
+  notesText.value   = trade.notes ?? ''
+  panelError.value  = ''
+}
+
+async function saveNotes() {
+  if (!notesTrade.value) return
+  try {
+    await updateTrade(notesTrade.value.id, { notes: notesText.value })
+    notesTrade.value = null
+    await store.fetchTrades(campaignId.value)
+  } catch (e) {
+    panelError.value = e instanceof Error ? e.message : 'Failed to save notes'
+  }
 }
 
 async function handleCloseCampaign() {
@@ -300,15 +344,16 @@ async function saveAccount() {
               <th class="th">CASH FLOW</th>
               <th class="th">STRATEGY</th>
               <th class="th">STATUS</th>
+              <th class="th"></th>
             </tr>
           </thead>
           <tbody>
             <template v-if="store.trades.length > 0">
-              <TradeRow v-for="trade in store.trades" :key="trade.id" :trade="trade" />
+              <TradeRow v-for="trade in store.trades" :key="trade.id" :trade="trade" @edit="onEditTrade" @notes="onNotesTrade" />
             </template>
             <template v-else>
               <tr>
-                <td :colspan="8" class="empty-cell">No trades recorded yet</td>
+                <td :colspan="9" class="empty-cell">No trades recorded yet</td>
               </tr>
             </template>
           </tbody>
@@ -339,7 +384,30 @@ async function saveAccount() {
         @save="onSave"
         @cancel="onCancel"
       />
+      <ConfirmPanel
+        v-else-if="editingTrade"
+        mode="edit"
+        :trade-leg="editingTrade"
+        :save-error="panelError"
+        :saving="saving"
+        @save="onSave"
+        @cancel="onCancel"
+      />
 
+      <div v-if="notesTrade" class="note-backdrop" @click.self="notesTrade = null">
+        <div class="note-dialog">
+          <div class="note-header">
+            <span class="dialog-title">NOTES</span>
+            <button class="btn-x" @click="notesTrade = null">✕</button>
+          </div>
+          <textarea v-model="notesText" class="note-textarea" rows="4" placeholder="Optional notes…" />
+          <p v-if="panelError" class="save-error">{{ panelError }}</p>
+          <div class="note-footer">
+            <button class="btn-cancel" @click="notesTrade = null">Cancel</button>
+            <button class="btn-save" @click="saveNotes">Save</button>
+          </div>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -579,4 +647,123 @@ async function saveAccount() {
   cursor: pointer;
   border-radius: 0;
 }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { transform: scale(0.97); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+.note-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade-in 0.15s ease;
+}
+
+.note-dialog {
+  width: 360px;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline-variant);
+  display: flex;
+  flex-direction: column;
+  animation: scale-in 0.15s ease;
+}
+
+.note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--outline-variant);
+  flex-shrink: 0;
+}
+
+.dialog-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--on-surface-variant);
+}
+
+.btn-x {
+  background: none;
+  border: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  line-height: 1;
+}
+
+.btn-x:hover { color: var(--on-surface); }
+
+.note-textarea {
+  margin: 16px 20px;
+  width: auto;
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: 0;
+  color: var(--on-surface);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 6px 10px;
+  outline: none;
+  resize: vertical;
+}
+
+.note-textarea:focus { border-color: var(--primary); }
+
+.save-error {
+  margin: 0 20px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-loss);
+}
+
+.note-footer {
+  display: flex;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--outline-variant);
+  flex-shrink: 0;
+}
+
+.btn-cancel {
+  flex: 1;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--outline-variant);
+  border-radius: 0;
+  color: var(--on-surface);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-cancel:hover { border-color: var(--outline); }
+
+.btn-save {
+  flex: 2;
+  padding: 8px 16px;
+  background: var(--primary-container);
+  border: none;
+  border-radius: 0;
+  color: var(--on-primary-container);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-save:hover { filter: brightness(1.1); }
 </style>

@@ -77,6 +77,14 @@ export interface CreateCampaignRequest {
   accountId?: number
 }
 
+export interface UpdateTradeRequest {
+  quantity?: number
+  price?: number
+  tradedAt?: string
+  strategyTag?: string
+  notes?: string
+}
+
 export interface SaveTradeRequest {
   campaignId: number
   rawInput: string

@@ -162,4 +162,64 @@ class TradeControllerTest {
            .andExpect(jsonPath("$[0].status").value("CLOSED"))
            .andExpect(jsonPath("$[0].openQuantity").value(0));
     }
+
+    @Test
+    void updateTrade_validFields_updatesLegAndRebuildsPositions() throws Exception {
+        int campaignId = createCampaign();
+
+        String tradeBody = mvc.perform(post("/api/v1/trades")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"campaignId":%d,"rawInput":"STO 5 SPY 480C 12/20 @2.35"}
+                        """.formatted(campaignId)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        int tradeId = JsonPath.read(tradeBody, "$.id");
+
+        mvc.perform(patch("/api/v1/trades/{id}", tradeId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"quantity":3,"price":1.50,"strategyTag":"ADJ","notes":"adjusted"}
+                        """))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.quantity").value(3))
+           .andExpect(jsonPath("$.price").value(1.50))
+           .andExpect(jsonPath("$.strategyTag").value("ADJ"))
+           .andExpect(jsonPath("$.notes").value("adjusted"));
+    }
+
+    @Test
+    void updateTrade_nonexistentTrade_returns404() throws Exception {
+        mvc.perform(patch("/api/v1/trades/{id}", 99999L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"quantity":3}
+                        """))
+           .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void updateTrade_closedCampaign_returns400() throws Exception {
+        int campaignId = createCampaign();
+
+        String tradeBody = mvc.perform(post("/api/v1/trades")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"campaignId":%d,"rawInput":"STO 5 SPY 480C 12/20 @2.35"}
+                        """.formatted(campaignId)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        int tradeId = JsonPath.read(tradeBody, "$.id");
+
+        mvc.perform(patch("/api/v1/campaigns/{id}/close", campaignId))
+           .andExpect(status().isOk());
+
+        mvc.perform(patch("/api/v1/trades/{id}", tradeId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"quantity":3}
+                        """))
+           .andExpect(status().isBadRequest())
+           .andExpect(jsonPath("$.error").value("Cannot edit trades in a closed campaign"));
+    }
 }

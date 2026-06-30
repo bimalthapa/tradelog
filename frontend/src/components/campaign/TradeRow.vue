@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { TradeLeg } from '@/types/index'
 
+const emit = defineEmits<{
+  edit:  [trade: TradeLeg]
+  notes: [trade: TradeLeg]
+}>()
+
 defineProps<{ trade: TradeLeg }>()
 
 function formatExpiry(isoDate: string): string {
@@ -61,6 +66,10 @@ function legStatusClass(action: TradeLeg['action']): string {
     </td>
     <td class="cell">
       <span class="status mono" :class="legStatusClass(trade.action)">{{ legStatus(trade.action) }}</span>
+    </td>
+    <td class="cell actions">
+      <button class="btn-icon" title="Edit trade" @click="emit('edit', trade)">✎</button>
+      <button class="btn-icon" title="Edit notes" @click="emit('notes', trade)">💬</button>
     </td>
   </tr>
 </template>
@@ -124,4 +133,33 @@ function legStatusClass(action: TradeLeg['action']): string {
 .status-closed   { color: var(--outline); }
 .status-expired  { color: var(--outline); }
 .status-assigned { color: var(--color-warning); }
+
+.actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 12px;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  opacity: 0.4;
+  transition: opacity 0.1s;
+  line-height: 1;
+}
+
+.trade-row:hover .btn-icon {
+  opacity: 0.8;
+}
+
+.btn-icon:hover {
+  opacity: 1 !important;
+  color: var(--primary);
+}
 </style>

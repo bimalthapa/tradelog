@@ -1,17 +1,31 @@
 package com.tradelog.position;
 
 import com.tradelog.trade.TradeLeg;
+import com.tradelog.trade.TradeLegRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
 public class PositionService {
 
     private final PositionRepository positionRepository;
+    private final TradeLegRepository tradeLegRepository;
 
-    public PositionService(PositionRepository positionRepository) {
+    public PositionService(PositionRepository positionRepository, TradeLegRepository tradeLegRepository) {
         this.positionRepository = positionRepository;
+        this.tradeLegRepository = tradeLegRepository;
+    }
+
+    @Transactional
+    public void rebuildPositions(Long campaignId) {
+        positionRepository.deleteByCampaignId(campaignId);
+        List<TradeLeg> legs = tradeLegRepository.findByCampaignIdOrderByTradedAtAscIdAsc(campaignId);
+        for (TradeLeg leg : legs) {
+            applyLeg(leg);
+        }
     }
 
     public void applyLeg(TradeLeg leg) {

@@ -20,6 +20,8 @@ public interface TradeLegRepository extends JpaRepository<TradeLeg, Long> {
 
     List<TradeLeg> findByCampaignIdOrderByTradedAtAsc(Long campaignId);
 
+    List<TradeLeg> findByCampaignIdOrderByTradedAtAscIdAsc(Long campaignId);
+
     @Query("SELECT SUM(tl.netCashFlow) FROM TradeLeg tl WHERE tl.instrumentType = 'OPTION' AND tl.netCashFlow > 0")
     Double findTotalPremium();
 

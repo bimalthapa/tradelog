@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { ParsedTrade, Position } from '@/types/index'
+import type { ParsedTrade, Position, TradeLeg } from '@/types/index'
 
 const props = defineProps<{
-  mode: 'parse' | 'close'
+  mode: 'parse' | 'close' | 'edit'
   trade?: ParsedTrade
   position?: Position
+  tradeLeg?: TradeLeg
   saveError?: string
   saving?: boolean
 }>()
@@ -38,6 +39,39 @@ watch(() => props.position, (p) => {
     notes.value     = ''
     tradeDate.value = todayDisplayDate()
   }
+})
+
+// Edit mode state
+const editQty       = ref(0)
+const editPrice     = ref('')
+const editTradeDate = ref('')
+const editStrategy  = ref('')
+const editNotes     = ref('')
+
+function formatDisplayDate(isoDate: string): string {
+  const [yyyy, mm, dd] = isoDate.split('-')
+  return `${mm}/${dd}/${yyyy}`
+}
+
+watch(() => props.tradeLeg, (leg) => {
+  if (leg) {
+    editQty.value       = leg.quantity
+    editPrice.value     = String(leg.price)
+    editTradeDate.value = formatDisplayDate(leg.tradedAt)
+    editStrategy.value  = leg.strategyTag ?? ''
+    editNotes.value     = leg.notes ?? ''
+  }
+}, { immediate: true })
+
+const editCashFlow = computed((): number | null => {
+  const qty   = Number(editQty.value)
+  const price = Number(editPrice.value)
+  if (!qty || !price || !props.tradeLeg) return null
+  const multiplier = props.tradeLeg.instrumentType === 'OPTION' ? 100 : 1
+  const raw = qty * price * multiplier
+  const action = props.tradeLeg.action
+  if (action === 'BTO' || action === 'BTC' || action === 'ASSIGNED') return -raw
+  return raw
 })
 
 const closeAction = computed(() => {
@@ -92,7 +126,7 @@ function handleSave() {
       notes:       notes.value,
       tradeDate:   toIsoDate(tradeDate.value),
     })
-  } else {
+  } else if (props.mode === 'close') {
     emit('save', {
       strategyTag: closeStrategy.value,
       notes:       notes.value,
@@ -100,16 +134,28 @@ function handleSave() {
       qty:         Number(closeQty.value),
       exitPrice:   Number(exitPrice.value),
     })
+  } else if (props.mode === 'edit') {
+    emit('save', {
+      strategyTag: editStrategy.value,
+      notes:       editNotes.value,
+      tradeDate:   toIsoDate(editTradeDate.value),
+      qty:         Number(editQty.value),
+      exitPrice:   Number(editPrice.value),
+    })
   }
 }
 </script>
 
 <template>
   <div class="backdrop" @click.self="emit('cancel')">
-    <div class="dialog" role="dialog" :aria-label="mode === 'parse' ? 'Confirm trade' : 'Close position'">
+    <div class="dialog" role="dialog" :aria-label="mode === 'parse' ? 'Confirm trade' : mode === 'close' ? 'Close position' : 'Edit trade'">
 
       <div class="dialog-header">
-        <span class="dialog-title">{{ mode === 'parse' ? 'CONFIRM TRADE' : 'CLOSE POSITION' }}</span>
+        <span class="dialog-title">{{
+          mode === 'parse' ? 'CONFIRM TRADE' :
+          mode === 'close' ? 'CLOSE POSITION' :
+          'EDIT TRADE'
+        }}</span>
         <button class="btn-x" @click="emit('cancel')" aria-label="Close">✕</button>
       </div>
 
@@ -184,6 +230,60 @@ function handleSave() {
             rows="3"
             placeholder="Optional notes…"
           />
+        </template>
+
+        <!-- Edit mode -->
+        <template v-else-if="mode === 'edit' && tradeLeg">
+          <div class="field-grid">
+            <div class="field-cell">
+              <span class="field-label">ACTION</span>
+              <span class="field-value">{{ tradeLeg.action }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">TICKER</span>
+              <span class="field-value">{{ tradeLeg.ticker }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">INSTRUMENT</span>
+              <span class="field-value">{{ tradeLeg.instrumentType }}</span>
+            </div>
+            <template v-if="tradeLeg.instrumentType === 'OPTION'">
+              <div class="field-cell">
+                <span class="field-label">STRIKE</span>
+                <span class="field-value">${{ tradeLeg.strike }}</span>
+              </div>
+              <div class="field-cell">
+                <span class="field-label">EXPIRY</span>
+                <span class="field-value">{{ formatExpiry(tradeLeg.expiry!) }}</span>
+              </div>
+            </template>
+          </div>
+
+          <div class="divider" />
+
+          <label class="input-label" for="edit-qty">QTY</label>
+          <input id="edit-qty" v-model="editQty" type="number" min="1" class="text-input" />
+
+          <label class="input-label" for="edit-price">PRICE</label>
+          <input id="edit-price" v-model="editPrice" type="number" min="0.01" step="0.01" class="text-input" placeholder="0.00" />
+
+          <div v-if="editCashFlow !== null" class="field-cell" style="margin-top: 4px;">
+            <span class="field-label">CASH FLOW</span>
+            <span class="field-value" :class="editCashFlow >= 0 ? 'profit' : 'loss'">
+              {{ editCashFlow >= 0 ? '+' : '' }}{{ formatCurrency(editCashFlow) }}
+            </span>
+          </div>
+
+          <div class="divider" />
+
+          <label class="input-label" for="edit-trade-date">TRADE DATE</label>
+          <input id="edit-trade-date" v-model="editTradeDate" type="text" class="text-input" placeholder="MM/DD/YYYY" />
+
+          <label class="input-label" for="edit-strategy">STRATEGY</label>
+          <input id="edit-strategy" v-model="editStrategy" type="text" class="text-input" placeholder="CSP, CC, Long…" />
+
+          <label class="input-label" for="edit-notes">NOTES</label>
+          <textarea id="edit-notes" v-model="editNotes" class="notes-textarea" rows="3" placeholder="Optional notes…" />
         </template>
 
         <!-- Close mode -->
@@ -272,7 +372,7 @@ function handleSave() {
 
       <div class="dialog-footer">
         <button class="btn-cancel" @click="emit('cancel')">Cancel</button>
-        <button class="btn-save" :disabled="saving" @click="handleSave">Save Trade</button>
+        <button class="btn-save" :disabled="saving" @click="handleSave">{{ mode === 'edit' ? 'Save Changes' : 'Save Trade' }}</button>
       </div>
 
     </div>
