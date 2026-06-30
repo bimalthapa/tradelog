@@ -6,13 +6,14 @@ import ConfirmPanel from '@/components/campaign/ConfirmPanel.vue'
 import PositionRow from '@/components/campaign/PositionRow.vue'
 import TradeRow from '@/components/campaign/TradeRow.vue'
 import { useTradeLogStore } from '@/stores/tradeLog'
+import { usePriceStore } from '@/stores/priceStore'
 import { saveTrade } from '@/services/tradeService'
 import { closeCampaign } from '@/services/campaignService'
-import { MOCK_PRICES } from '@/types/index'
 import type { ParsedTrade, Position } from '@/types/index'
 
-const route = useRoute()
-const store = useTradeLogStore()
+const route      = useRoute()
+const store      = useTradeLogStore()
+const priceStore = usePriceStore()
 
 const loading         = ref(true)
 const saving          = ref(false)
@@ -31,6 +32,7 @@ onMounted(async () => {
     store.fetchTrades(id),
     store.fetchPositions(id),
   ])
+  if (campaign.value) priceStore.ensureTicker(campaign.value.ticker)
   loading.value = false
 })
 
@@ -41,19 +43,22 @@ watch(campaignId, async (id) => {
     store.fetchTrades(id),
     store.fetchPositions(id),
   ])
+  if (campaign.value) priceStore.ensureTicker(campaign.value.ticker)
   loading.value = false
 })
 
 const campaign = computed(() => store.currentCampaign)
 
-const mockPrice = computed(() =>
-  campaign.value ? (MOCK_PRICES[campaign.value.ticker] ?? null) : null
+const currentPrice = computed(() =>
+  campaign.value ? priceStore.getPrice(campaign.value.ticker) : null
 )
 
 const unrealizedPnl = computed(() => {
   const c = campaign.value
   if (!c || !c.sharesHeld || c.costBasis == null) return 0
-  return c.sharesHeld * ((MOCK_PRICES[c.ticker] ?? 0) - c.costBasis)
+  const price = currentPrice.value
+  if (price == null) return 0
+  return c.sharesHeld * (price - c.costBasis)
 })
 
 const netCashFlow = computed(() =>
@@ -224,7 +229,7 @@ async function saveAccount() {
           </div>
           <div class="stat">
             <div class="stat-label">CURR PRICE</div>
-            <div class="stat-value">{{ formatCurrency(mockPrice) }}</div>
+            <div class="stat-value">{{ priceStore.loading ? '…' : formatCurrency(currentPrice) }}</div>
           </div>
           <div class="stat">
             <div class="stat-label">ACCOUNT</div>

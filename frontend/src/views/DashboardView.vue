@@ -1,17 +1,28 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Campaign } from '@/types/index'
-import { MOCK_PRICES } from '@/types/index'
 import { useTradeLogStore } from '@/stores/tradeLog'
+import { usePriceStore } from '@/stores/priceStore'
 import CampaignRow from '@/components/dashboard/CampaignRow.vue'
 
-const router = useRouter()
-const store  = useTradeLogStore()
+const router     = useRouter()
+const store      = useTradeLogStore()
+const priceStore = usePriceStore()
+
+onMounted(() => {
+  store.campaigns.forEach(c => priceStore.ensureTicker(c.ticker))
+})
+
+watch(() => store.campaigns, (campaigns) => {
+  campaigns.forEach(c => priceStore.ensureTicker(c.ticker))
+})
 
 function unrealizedFor(c: Campaign): number {
   if (!c.sharesHeld || c.costBasis == null) return 0
-  return Math.round(c.sharesHeld * ((MOCK_PRICES[c.ticker] ?? 0) - c.costBasis))
+  const price = priceStore.getPrice(c.ticker)
+  if (price == null) return 0
+  return Math.round(c.sharesHeld * (price - c.costBasis))
 }
 
 function filterByAccount(items: Campaign[]): Campaign[] {

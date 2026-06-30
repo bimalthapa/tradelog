@@ -2,11 +2,15 @@
 import { onMounted } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
 import { useTradeLogStore } from '@/stores/tradeLog'
+import { usePriceStore } from '@/stores/priceStore'
 
-const store = useTradeLogStore()
+const store      = useTradeLogStore()
+const priceStore = usePriceStore()
+
 onMounted(() => {
   store.fetchCampaigns()
   store.fetchAccounts()
+  priceStore.startPolling()
 })
 </script>
 

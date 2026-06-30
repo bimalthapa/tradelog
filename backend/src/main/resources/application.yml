@@ -15,3 +15,7 @@ spring:
     locations: classpath:db/migration
 server:
   port: 8080
+tradelog:
+  price:
+    cache-ttl-minutes: 5
+    timeout-seconds: 3

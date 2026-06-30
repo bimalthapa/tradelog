@@ -85,14 +85,6 @@ export interface SaveTradeRequest {
   tradedAt?: string
 }
 
-export const MOCK_PRICES: Record<string, number> = {
-  NVDA: 875.40,
-  SPY:  502.18,
-  TSLA: 155.30,
-  AAPL: 185.92,
-  AMD:  165.44,
-}
-
 export interface AnalyticsSummary {
   totalPremium:    number
   netOptionsPnl:   number

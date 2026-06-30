@@ -5,7 +5,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import CampaignDetailView from './CampaignDetailView.vue'
 import type { Campaign, TradeLeg, Position, ParsedTrade } from '@/types/index'
-import { MOCK_PRICES } from '@/types/index'
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: '1' } }),
@@ -25,6 +24,14 @@ vi.mock('@/services/tradeService', () => ({
 
 vi.mock('@/services/positionService', () => ({
   getPositionsForCampaign: vi.fn(),
+}))
+
+vi.mock('@/stores/priceStore', () => ({
+  usePriceStore: () => ({
+    getPrice:      (ticker: string) => ticker === 'NVDA' ? 875.40 : null,
+    ensureTicker:  vi.fn().mockResolvedValue(undefined),
+    loading:       false,
+  }),
 }))
 
 import { getCampaign, closeCampaign } from '@/services/campaignService'
@@ -196,14 +203,15 @@ describe('stat strip', () => {
     expect(stats[2]!.classes()).toContain('loss')
   })
 
-  it('shows unrealized P&L from MOCK_PRICES and costBasis (index 3)', async () => {
+  it('shows unrealized P&L from live price and costBasis (index 3)', async () => {
     const stats = await getStatValues(mountView())
-    const unrlz = 300 * ((MOCK_PRICES['NVDA'] ?? 0) - 820.83)
+    // priceStore mock returns 875.40 for NVDA; mockCampaign has sharesHeld=300, costBasis=820.83
+    const unrlz = 300 * (875.40 - 820.83)
     const expected = '+' + unrlz.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
     expect(stats[3]!.text()).toBe(expected)
   })
 
-  it('shows current price from MOCK_PRICES (index 4)', async () => {
+  it('shows current price from priceStore (index 4)', async () => {
     const stats = await getStatValues(mountView())
     expect(stats[4]!.text()).toBe('$875.40')
   })
