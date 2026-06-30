@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { Position } from '@/types/index'
 
-const props = defineProps<{ position: Position }>()
-const emit  = defineEmits<{ close: [Position] }>()
+const props = defineProps<{ position: Position; rollTooltip?: string }>()
+const emit  = defineEmits<{ close: [Position]; roll: [Position] }>()
 
 function formatExpiry(isoDate: string): string {
   const [, month, day] = isoDate.split('-')
@@ -25,6 +25,7 @@ function formatExpiry(isoDate: string): string {
         {{ position.strike }}{{ position.optionType === 'CALL' ? 'C' : 'P' }} {{ formatExpiry(position.expiry!) }}
       </span>
       <span v-else class="instr-detail mono">STOCK</span>
+      <span v-if="props.rollTooltip" class="roll-badge" :title="props.rollTooltip">↻</span>
     </td>
     <td class="cell mono">${{ position.avgPrice.toFixed(2) }}</td>
     <td class="cell">
@@ -39,6 +40,13 @@ function formatExpiry(isoDate: string): string {
         @click="emit('close', position)"
       >
         Close
+      </button>
+      <button
+        v-if="position.status === 'OPEN' && position.instrumentType === 'OPTION'"
+        class="btn-roll-pos"
+        @click="emit('roll', position)"
+      >
+        Roll
       </button>
     </td>
   </tr>
@@ -108,4 +116,28 @@ function formatExpiry(isoDate: string): string {
 }
 
 .btn-close-pos:hover { border-color: var(--color-loss); }
+
+.roll-badge {
+  font-size: 11px;
+  color: var(--primary);
+  margin-left: 6px;
+  cursor: default;
+  opacity: 0.7;
+}
+
+.btn-roll-pos {
+  background: transparent;
+  border: 1px solid var(--outline-variant);
+  border-radius: 0;
+  color: var(--primary);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+
+.btn-roll-pos:hover { border-color: var(--primary); }
 </style>

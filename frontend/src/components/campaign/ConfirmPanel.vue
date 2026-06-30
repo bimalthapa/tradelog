@@ -4,17 +4,19 @@ import type { ParsedTrade, Position, TradeLeg } from '@/types/index'
 import { detectMultiLegStrategy } from '@/composables/useTradeParser'
 
 const props = defineProps<{
-  mode: 'parse' | 'close' | 'edit'
+  mode: 'parse' | 'close' | 'edit' | 'roll'
   trade?: ParsedTrade
   trades?: ParsedTrade[]
   position?: Position
   tradeLeg?: TradeLeg
+  rollingPosition?: Position
   saveError?: string
   saving?: boolean
 }>()
 
 const emit = defineEmits<{
   save: [{ strategyTag: string; notes: string; tradeDate: string; qty?: number; exitPrice?: number }]
+  roll: [{ qty: number; btcPrice: number; newStrike: number; newExpiry: string; stoPrice: number; tradeDate: string; notes: string }]
   cancel: []
 }>()
 
@@ -67,6 +69,13 @@ const editTradeDate = ref('')
 const editStrategy  = ref('')
 const editNotes     = ref('')
 
+// Roll mode state
+const rollBtcPrice  = ref('')
+const rollQty       = ref(0)
+const rollNewStrike = ref('')
+const rollNewExpiry = ref('')
+const rollStoPrice  = ref('')
+
 function formatDisplayDate(isoDate: string): string {
   const [yyyy, mm, dd] = isoDate.split('-')
   return `${mm}/${dd}/${yyyy}`
@@ -81,6 +90,18 @@ watch(() => props.tradeLeg, (leg) => {
     editNotes.value     = leg.notes ?? ''
   }
 }, { immediate: true })
+
+watch(() => props.rollingPosition, (p) => {
+  if (p) {
+    rollQty.value       = p.openQuantity
+    rollBtcPrice.value  = ''
+    rollNewStrike.value = ''
+    rollNewExpiry.value = ''
+    rollStoPrice.value  = ''
+    tradeDate.value     = todayDisplayDate()
+    notes.value         = ''
+  }
+})
 
 const editCashFlow = computed((): number | null => {
   const qty   = Number(editQty.value)
@@ -115,6 +136,20 @@ const closeCashFlow = computed((): number | null => {
   return closeAction.value === 'BTC'
     ? -(qty * price * multiplier)
     :  (qty * price * multiplier)
+})
+
+const rollBtcCashFlow = computed((): number | null => {
+  const qty   = Number(rollQty.value)
+  const price = Number(rollBtcPrice.value)
+  if (!qty || !price) return null
+  return -(qty * price * 100)
+})
+
+const rollStoCashFlow = computed((): number | null => {
+  const qty   = Number(rollQty.value)
+  const price = Number(rollStoPrice.value)
+  if (!qty || !price) return null
+  return qty * price * 100
 })
 
 function formatExpiry(iso: string): string {
@@ -161,18 +196,29 @@ function handleSave() {
       qty:         Number(editQty.value),
       exitPrice:   Number(editPrice.value),
     })
+  } else if (props.mode === 'roll') {
+    emit('roll', {
+      qty:       Number(rollQty.value),
+      btcPrice:  Number(rollBtcPrice.value),
+      newStrike: Number(rollNewStrike.value),
+      newExpiry: rollNewExpiry.value,
+      stoPrice:  Number(rollStoPrice.value),
+      tradeDate: toIsoDate(tradeDate.value),
+      notes:     notes.value,
+    })
   }
 }
 </script>
 
 <template>
   <div class="backdrop" @click.self="emit('cancel')">
-    <div class="dialog" role="dialog" :aria-label="mode === 'parse' ? 'Confirm trade' : mode === 'close' ? 'Close position' : 'Edit trade'">
+    <div class="dialog" role="dialog" :aria-label="mode === 'parse' ? 'Confirm trade' : mode === 'close' ? 'Close position' : mode === 'roll' ? 'Roll position' : 'Edit trade'">
 
       <div class="dialog-header">
         <span class="dialog-title">{{
           mode === 'parse' ? 'CONFIRM TRADE' :
           mode === 'close' ? 'CLOSE POSITION' :
+          mode === 'roll'  ? 'ROLL POSITION'  :
           'EDIT TRADE'
         }}</span>
         <button class="btn-x" @click="emit('cancel')" aria-label="Close">✕</button>
@@ -436,12 +482,80 @@ function handleSave() {
           />
         </template>
 
+        <!-- Roll mode -->
+        <template v-else-if="mode === 'roll' && rollingPosition">
+          <div class="field-grid">
+            <div class="field-cell">
+              <span class="field-label">TICKER</span>
+              <span class="field-value">{{ rollingPosition.ticker }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">OPTION TYPE</span>
+              <span class="field-value">{{ rollingPosition.optionType }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">STRIKE</span>
+              <span class="field-value">${{ rollingPosition.strike }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">EXPIRY</span>
+              <span class="field-value">{{ formatExpiry(rollingPosition.expiry!) }}</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">ACTION</span>
+              <span class="field-value">BTC</span>
+            </div>
+            <div class="field-cell">
+              <span class="field-label">QTY</span>
+              <span class="field-value">{{ rollingPosition.openQuantity }}</span>
+            </div>
+          </div>
+
+          <div class="divider" />
+
+          <label class="input-label" for="roll-btc-price">BTC PRICE</label>
+          <input id="roll-btc-price" v-model="rollBtcPrice" type="number" min="0" step="0.01" class="text-input" placeholder="0.00" />
+
+          <div v-if="rollBtcCashFlow !== null" class="field-cell" style="margin-top: 4px;">
+            <span class="field-label">CASH FLOW</span>
+            <span class="field-value loss">{{ formatCurrency(rollBtcCashFlow) }}</span>
+          </div>
+
+          <div class="divider" />
+          <span class="section-label">OPENING</span>
+
+          <label class="input-label" for="roll-qty">QTY</label>
+          <input id="roll-qty" v-model="rollQty" type="number" min="1" class="text-input" />
+
+          <label class="input-label" for="roll-new-strike">NEW STRIKE</label>
+          <input id="roll-new-strike" v-model="rollNewStrike" type="number" min="0" step="0.5" class="text-input" placeholder="0.00" />
+
+          <label class="input-label" for="roll-new-expiry">NEW EXPIRY</label>
+          <input id="roll-new-expiry" v-model="rollNewExpiry" type="text" class="text-input" placeholder="MM/DD" />
+
+          <label class="input-label" for="roll-sto-price">STO PRICE</label>
+          <input id="roll-sto-price" v-model="rollStoPrice" type="number" min="0" step="0.01" class="text-input" placeholder="0.00" />
+
+          <div v-if="rollStoCashFlow !== null" class="field-cell" style="margin-top: 4px;">
+            <span class="field-label">CASH FLOW</span>
+            <span class="field-value profit">+{{ formatCurrency(rollStoCashFlow) }}</span>
+          </div>
+
+          <div class="divider" />
+
+          <label class="input-label" for="roll-trade-date">TRADE DATE</label>
+          <input id="roll-trade-date" v-model="tradeDate" type="text" class="text-input" placeholder="MM/DD/YYYY" />
+
+          <label class="input-label" for="roll-notes">NOTES</label>
+          <textarea id="roll-notes" v-model="notes" class="notes-textarea" rows="3" placeholder="Optional notes…" />
+        </template>
+
         <p v-if="saveError" class="save-error">{{ saveError }}</p>
       </div>
 
       <div class="dialog-footer">
         <button class="btn-cancel" @click="emit('cancel')">Cancel</button>
-        <button class="btn-save" :disabled="saving" @click="handleSave">{{ mode === 'edit' ? 'Save Changes' : 'Save Trade' }}</button>
+        <button class="btn-save" :disabled="saving" @click="handleSave">{{ mode === 'edit' ? 'Save Changes' : mode === 'roll' ? 'Save Roll' : 'Save Trade' }}</button>
       </div>
 
     </div>
@@ -556,6 +670,14 @@ function handleSave() {
   font-weight: 700;
   letter-spacing: 0.05em;
   color: var(--on-surface-variant);
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--on-surface-variant);
+  margin-bottom: 4px;
 }
 
 .text-input,

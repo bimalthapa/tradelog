@@ -3,7 +3,10 @@ package com.tradelog.trade;
 import com.tradelog.campaign.Campaign;
 import com.tradelog.campaign.CampaignRepository;
 import com.tradelog.common.exception.ResourceNotFoundException;
+import com.tradelog.position.Position;
+import com.tradelog.position.PositionRepository;
 import com.tradelog.position.PositionService;
+import com.tradelog.trade.dto.RollTradeRequest;
 import com.tradelog.trade.dto.SaveTradeRequest;
 import com.tradelog.trade.dto.TradeLegResponse;
 import com.tradelog.trade.parser.ParsedTradeInput;
@@ -33,6 +36,7 @@ class TradeEntryServiceTest {
     @Mock TradeEntryRepository tradeEntryRepository;
     @Mock TradeLegRepository tradeLegRepository;
     @Mock PositionService positionService;
+    @Mock PositionRepository positionRepository;
 
     @InjectMocks
     TradeEntryService service;
@@ -307,5 +311,93 @@ class TradeEntryServiceTest {
 
         assertThat(entryCaptor.getValue().getRawInput())
                 .isEqualTo("STO 5 SPY 480C 12/20 @2.35, BTO 5 SPY 485C 12/20 @0.85");
+    }
+
+    // ── saveRoll() helpers ────────────────────────────────────────────────────
+
+    private Position makeOpenOptionPosition(Long id, Long campaignId, Long openingLegId) {
+        Position p = new Position();
+        try {
+            java.lang.reflect.Field f = Position.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(p, id);
+        } catch (Exception e) { throw new RuntimeException(e); }
+        p.setCampaignId(campaignId);
+        p.setOpeningLegId(openingLegId);
+        p.setInstrumentType("OPTION");
+        p.setTicker("SPY");
+        p.setOptionType("PUT");
+        p.setStrike(480.0);
+        p.setExpiry(LocalDate.of(2026, 12, 20));
+        p.setOpenAction("STO");
+        p.setOpenQuantity(5);
+        p.setAvgPrice(2.35);
+        p.setStatus("OPEN");
+        p.setOpenedAt(LocalDate.now());
+        return p;
+    }
+
+    // ── saveRoll() tests ──────────────────────────────────────────────────────
+
+    @Test
+    void saveRoll_throwsNotFound_whenPositionMissing() {
+        when(positionRepository.findById(99L)).thenReturn(Optional.empty());
+
+        RollTradeRequest req = new RollTradeRequest(1L, 99L, 5, 1.80, 470.0, "1/17", 2.10, null, null);
+
+        assertThatThrownBy(() -> service.saveRoll(req))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("99");
+    }
+
+    @Test
+    void saveRoll_throwsBadRequest_whenPositionClosed() {
+        Position closed = makeOpenOptionPosition(10L, 1L, 5L);
+        closed.setStatus("CLOSED");
+        when(positionRepository.findById(10L)).thenReturn(Optional.of(closed));
+
+        RollTradeRequest req = new RollTradeRequest(1L, 10L, 5, 1.80, 470.0, "1/17", 2.10, null, null);
+
+        assertThatThrownBy(() -> service.saveRoll(req))
+                .isInstanceOf(com.tradelog.common.exception.BadRequestException.class)
+                .hasMessageContaining("not open");
+    }
+
+    @Test
+    void saveRoll_createsBtcAndStoLegs_withClosesLegIdOnBtc() {
+        Position position = makeOpenOptionPosition(10L, 1L, 5L);
+        when(positionRepository.findById(10L)).thenReturn(Optional.of(position));
+
+        TradeEntry fakeEntry = makeEntry(20L, 1L, "Roll", null);
+        when(tradeEntryRepository.save(any())).thenReturn(fakeEntry);
+
+        TradeLeg fakeBtcLeg = makeLeg(30L, 20L, 1L);
+        fakeBtcLeg.setAction("BTC");
+        fakeBtcLeg.setClosesLegId(5L);
+        fakeBtcLeg.setPrice(1.80);
+        fakeBtcLeg.setNetCashFlow(-900.0);
+
+        TradeLeg fakeStoLeg = makeLeg(31L, 20L, 1L);
+        fakeStoLeg.setAction("STO");
+        fakeStoLeg.setStrike(470.0);
+        fakeStoLeg.setPrice(2.10);
+        fakeStoLeg.setNetCashFlow(1050.0);
+
+        when(tradeLegRepository.save(any()))
+                .thenReturn(fakeBtcLeg)
+                .thenReturn(fakeStoLeg);
+
+        RollTradeRequest req = new RollTradeRequest(1L, 10L, 5, 1.80, 470.0, "1/17", 2.10, null, null);
+        List<TradeLegResponse> responses = service.saveRoll(req);
+
+        verify(tradeEntryRepository, times(1)).save(any(TradeEntry.class));
+        verify(tradeLegRepository, times(2)).save(any(TradeLeg.class));
+        verify(positionService, times(2)).applyLeg(any(TradeLeg.class));
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).action()).isEqualTo("BTC");
+        assertThat(responses.get(0).closesLegId()).isEqualTo(5L);
+        assertThat(responses.get(1).action()).isEqualTo("STO");
+        assertThat(responses.get(1).closesLegId()).isNull();
     }
 }

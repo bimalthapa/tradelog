@@ -1,4 +1,4 @@
-import type { TradeLeg, SaveTradeRequest, UpdateTradeRequest } from '@/types/index'
+import type { TradeLeg, SaveTradeRequest, UpdateTradeRequest, RollTradeRequest } from '@/types/index'
 
 const BASE = '/api/v1/trades'
 
@@ -37,6 +37,14 @@ export async function saveBatchTrade(req: {
     throw new Error(text || `Batch save failed: ${res.status}`)
   }
   return res.json()
+}
+
+export async function rollPosition(req: RollTradeRequest): Promise<TradeLeg[]> {
+  return request<TradeLeg[]>(`${BASE}/roll`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
 }
 
 export async function updateTrade(id: number, req: UpdateTradeRequest): Promise<TradeLeg> {

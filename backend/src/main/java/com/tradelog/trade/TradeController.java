@@ -5,6 +5,7 @@ import com.tradelog.trade.dto.ParseTradeResponse;
 import com.tradelog.trade.dto.BatchSaveTradeRequest;
 import com.tradelog.trade.dto.SaveTradeRequest;
 import com.tradelog.trade.dto.TradeLegResponse;
+import com.tradelog.trade.dto.RollTradeRequest;
 import com.tradelog.trade.dto.UpdateTradeRequest;
 import com.tradelog.trade.parser.ParsedTradeInput;
 import com.tradelog.trade.parser.TradeInputParser;
@@ -40,6 +41,11 @@ public class TradeController {
     @PostMapping("/batch")
     public List<TradeLegResponse> saveBatch(@RequestBody BatchSaveTradeRequest req) {
         return tradeEntryService.saveBatch(req);
+    }
+
+    @PostMapping("/roll")
+    public List<TradeLegResponse> roll(@RequestBody RollTradeRequest req) {
+        return tradeEntryService.saveRoll(req);
     }
 
     @PatchMapping("/{id}")

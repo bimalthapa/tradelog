@@ -10,6 +10,7 @@
 - **Multi-account support** — Multiple brokerage accounts tracked in parallel `[SHIPPED]`
 - **Edit trades from history** — Position rebuild on edit `[SHIPPED]`
 - **Multi-leg trade entry** — Comma-separated spread entry (vertical, iron condor, calendar) with compact confirm table and auto-detected strategy tags `[SHIPPED]`
+- **Roll tracking** — Roll button on open option positions, Roll modal, atomic BTC+STO backend, `closes_leg_id` wired, roll badge (↻) with tooltips `[SHIPPED]`
 
 ---
 
@@ -19,7 +20,7 @@
 
 2. **Broker CSV/JSON import** — Manual entry is the #1 friction point. Supporting imports from IBKR, Schwab, Robinhood, TastyTrade, and TWS would dramatically reduce the barrier to getting trade data into the system. Even a generic CSV mapper would be transformative.
 
-3. **Roll tracking** — The `closes_leg_id` column exists but is never populated at save time. Without this, the system can't connect a roll (BTC old + STO new) as a single economic event. Essential for the wheel strategy which is this app's implied primary use case.
+3. **Roll tracking** `[SHIPPED]` — Roll button on open option positions, Roll modal (BTC + new STO entry), atomic `POST /api/v1/trades/roll` backend, `closes_leg_id` wired on BTC leg, roll badge (↻) with tooltips on Trade History and Open Positions.
 
 4. **Export (CSV + summary PDF)** — Users need to get data *out* for tax filing, sharing with their CPA, or importing into other tools. A campaign-level CSV export of trade legs and a summary report (realized P&L by ticker, short/long-term gain breakdown) would add significant utility.
 

@@ -34,9 +34,9 @@ const geo = computed(() => {
   ).join(' ')
 
   const areaPath = [
-    `M${coords[0].x.toFixed(1)},${yBase}`,
+    `M${coords[0]!.x.toFixed(1)},${yBase}`,
     ...coords.map(c => `L${c.x.toFixed(1)},${c.y.toFixed(1)}`),
-    `L${coords[n - 1].x.toFixed(1)},${yBase}`,
+    `L${coords[n - 1]!.x.toFixed(1)},${yBase}`,
     'Z',
   ].join(' ')
 
@@ -54,9 +54,11 @@ const geo = computed(() => {
 })
 
 function fmtMonth(ym: string): string {
-  const [y, m] = ym.split('-')
-  const names  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  return `${names[parseInt(m) - 1]} '${y.slice(2)}`
+  const parts = ym.split('-')
+  const y = parts[0] ?? ''
+  const m = parts[1] ?? ''
+  const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  return `${names[parseInt(m, 10) - 1] ?? ''} '${y.slice(2)}`
 }
 </script>
 

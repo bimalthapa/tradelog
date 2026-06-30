@@ -17,5 +17,6 @@ public record TradeLegResponse(
         LocalDate expiry,
         LocalDate tradedAt,
         String strategyTag,
-        String notes
+        String notes,
+        Long closesLegId
 ) {}

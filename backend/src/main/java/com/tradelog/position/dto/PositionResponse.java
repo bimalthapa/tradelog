@@ -15,5 +15,6 @@ public record PositionResponse(
         double avgPrice,
         String status,
         LocalDate openedAt,
-        LocalDate closedAt
+        LocalDate closedAt,
+        Long openingLegId
 ) {}

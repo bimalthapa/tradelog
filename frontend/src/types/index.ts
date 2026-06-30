@@ -36,6 +36,7 @@ export interface TradeLeg {
   tradedAt: string
   strategyTag?: string
   notes?: string
+  closesLegId?: number
 }
 
 export interface Position {
@@ -52,6 +53,7 @@ export interface Position {
   status: 'OPEN' | 'CLOSED'
   openedAt: string
   closedAt?: string
+  openingLegId?: number
 }
 
 export interface ParsedTrade {
@@ -82,6 +84,18 @@ export interface UpdateTradeRequest {
   price?: number
   tradedAt?: string
   strategyTag?: string
+  notes?: string
+}
+
+export interface RollTradeRequest {
+  campaignId: number
+  positionId: number
+  qty: number
+  btcPrice: number
+  newStrike: number
+  newExpiry: string
+  stoPrice: number
+  tradedAt?: string
   notes?: string
 }
 

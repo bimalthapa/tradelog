@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -140,6 +141,35 @@ class TradeControllerTest {
     }
 
     @Test
+    void saveTrade_responseIncludesClosesLegIdField() throws Exception {
+        int campaignId = createCampaign();
+
+        mvc.perform(post("/api/v1/trades")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"campaignId":%d,"rawInput":"STO 5 SPY 480P 12/20 @2.35"}
+                        """.formatted(campaignId)))
+           .andExpect(status().isOk())
+           .andExpect(content().string(containsString("closesLegId")));
+    }
+
+    @Test
+    void getPositions_responseIncludesOpeningLegId() throws Exception {
+        int campaignId = createCampaign();
+
+        mvc.perform(post("/api/v1/trades")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"campaignId":%d,"rawInput":"STO 5 SPY 480P 12/20 @2.35"}
+                        """.formatted(campaignId)))
+           .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/positions").param("campaignId", String.valueOf(campaignId)))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$[0].openingLegId").isNumber());
+    }
+
+    @Test
     void closingTrade_reducesPositionQuantity() throws Exception {
         int campaignId = createCampaign();
 
@@ -221,5 +251,60 @@ class TradeControllerTest {
                         """))
            .andExpect(status().isBadRequest())
            .andExpect(jsonPath("$.error").value("Cannot edit trades in a closed campaign"));
+    }
+
+    // ── roll endpoint tests ────────────────────────────────────────────────────
+
+    @Test
+    void rollTrade_closesOldPositionAndOpensNew() throws Exception {
+        int campaignId = createCampaign();
+
+        // Open initial STO position
+        mvc.perform(post("/api/v1/trades")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"campaignId":%d,"rawInput":"STO 5 SPY 480P 12/20 @2.35"}
+                        """.formatted(campaignId)))
+           .andExpect(status().isOk());
+
+        // Get the position id
+        String positionsJson = mvc.perform(get("/api/v1/positions")
+                .param("campaignId", String.valueOf(campaignId)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        int positionId = JsonPath.read(positionsJson, "$[0].id");
+
+        // Roll it
+        mvc.perform(post("/api/v1/trades/roll")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"campaignId":%d,"positionId":%d,"qty":5,"btcPrice":1.80,"newStrike":470.0,"newExpiry":"1/17","stoPrice":2.10,"notes":null}
+                        """.formatted(campaignId, positionId)))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$").isArray())
+           .andExpect(jsonPath("$[0].action").value("BTC"))
+           .andExpect(jsonPath("$[0].closesLegId").isNumber())
+           .andExpect(jsonPath("$[1].action").value("STO"))
+           .andExpect(jsonPath("$[1].strike").value(470.0))
+           .andReturn().getResponse().getContentAsString();
+
+        // Old position closed, new one open
+        mvc.perform(get("/api/v1/positions").param("campaignId", String.valueOf(campaignId)))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$[0].status").value("CLOSED"))
+           .andExpect(jsonPath("$[1].status").value("OPEN"))
+           .andExpect(jsonPath("$[1].strike").value(470.0));
+    }
+
+    @Test
+    void rollTrade_unknownPosition_returns404() throws Exception {
+        int campaignId = createCampaign();
+
+        mvc.perform(post("/api/v1/trades/roll")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"campaignId":%d,"positionId":99999,"qty":5,"btcPrice":1.80,"newStrike":470.0,"newExpiry":"1/17","stoPrice":2.10}
+                        """.formatted(campaignId)))
+           .andExpect(status().isNotFound());
     }
 }

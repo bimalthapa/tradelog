@@ -23,7 +23,7 @@ public class PositionController {
                         p.getId(), p.getCampaignId(), p.getInstrumentType(), p.getTicker(),
                         p.getOptionType(), p.getStrike(), p.getExpiry(), p.getOpenAction(),
                         p.getOpenQuantity(), p.getAvgPrice(), p.getStatus(),
-                        p.getOpenedAt(), p.getClosedAt()))
+                        p.getOpenedAt(), p.getClosedAt(), p.getOpeningLegId()))
                 .toList();
     }
 }

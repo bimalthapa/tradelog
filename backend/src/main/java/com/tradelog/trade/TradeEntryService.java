@@ -4,8 +4,11 @@ import com.tradelog.campaign.Campaign;
 import com.tradelog.campaign.CampaignRepository;
 import com.tradelog.common.exception.BadRequestException;
 import com.tradelog.common.exception.ResourceNotFoundException;
+import com.tradelog.position.Position;
+import com.tradelog.position.PositionRepository;
 import com.tradelog.position.PositionService;
 import com.tradelog.trade.dto.BatchSaveTradeRequest;
+import com.tradelog.trade.dto.RollTradeRequest;
 import com.tradelog.trade.dto.SaveTradeRequest;
 import com.tradelog.trade.dto.TradeLegResponse;
 import com.tradelog.trade.dto.UpdateTradeRequest;
@@ -27,17 +30,20 @@ public class TradeEntryService {
     private final TradeEntryRepository tradeEntryRepository;
     private final TradeLegRepository tradeLegRepository;
     private final PositionService positionService;
+    private final PositionRepository positionRepository;
 
     public TradeEntryService(TradeInputParser parser,
                              CampaignRepository campaignRepository,
                              TradeEntryRepository tradeEntryRepository,
                              TradeLegRepository tradeLegRepository,
-                             PositionService positionService) {
+                             PositionService positionService,
+                             PositionRepository positionRepository) {
         this.parser = parser;
         this.campaignRepository = campaignRepository;
         this.tradeEntryRepository = tradeEntryRepository;
         this.tradeLegRepository = tradeLegRepository;
         this.positionService = positionService;
+        this.positionRepository = positionRepository;
     }
 
     @Transactional
@@ -116,6 +122,64 @@ public class TradeEntryService {
         return responses;
     }
 
+    @Transactional
+    public List<TradeLegResponse> saveRoll(RollTradeRequest req) {
+        Position position = positionRepository.findById(req.positionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Position not found: " + req.positionId()));
+        if (!"OPEN".equals(position.getStatus())) {
+            throw new BadRequestException("Position is not open");
+        }
+        if (!"OPTION".equals(position.getInstrumentType())) {
+            throw new BadRequestException("Can only roll option positions");
+        }
+
+        TradeEntry entry = new TradeEntry();
+        entry.setCampaignId(req.campaignId());
+        entry.setEnteredAt(LocalDateTime.now());
+        entry.setStrategyTag("Roll");
+        entry.setNotes(req.notes());
+        entry.setRawInput("ROLL");
+        TradeEntry savedEntry = tradeEntryRepository.save(entry);
+
+        LocalDate tradedAt = req.tradedAt() != null ? req.tradedAt() : LocalDate.now();
+
+        TradeLeg btcLeg = new TradeLeg();
+        btcLeg.setTradeEntryId(savedEntry.getId());
+        btcLeg.setCampaignId(req.campaignId());
+        btcLeg.setInstrumentType("OPTION");
+        btcLeg.setAction("BTC");
+        btcLeg.setTicker(position.getTicker());
+        btcLeg.setQuantity(req.qty());
+        btcLeg.setPrice(req.btcPrice());
+        btcLeg.setNetCashFlow(-(req.qty() * req.btcPrice() * 100));
+        btcLeg.setOptionType(position.getOptionType());
+        btcLeg.setStrike(position.getStrike());
+        btcLeg.setExpiry(position.getExpiry());
+        btcLeg.setClosesLegId(position.getOpeningLegId());
+        btcLeg.setTradedAt(tradedAt);
+        TradeLeg savedBtcLeg = tradeLegRepository.save(btcLeg);
+        positionService.applyLeg(savedBtcLeg);
+
+        LocalDate newExpiry = parser.parseExpiry(req.newExpiry());
+        TradeLeg stoLeg = new TradeLeg();
+        stoLeg.setTradeEntryId(savedEntry.getId());
+        stoLeg.setCampaignId(req.campaignId());
+        stoLeg.setInstrumentType("OPTION");
+        stoLeg.setAction("STO");
+        stoLeg.setTicker(position.getTicker());
+        stoLeg.setQuantity(req.qty());
+        stoLeg.setPrice(req.stoPrice());
+        stoLeg.setNetCashFlow(req.qty() * req.stoPrice() * 100);
+        stoLeg.setOptionType(position.getOptionType());
+        stoLeg.setStrike(req.newStrike());
+        stoLeg.setExpiry(newExpiry);
+        stoLeg.setTradedAt(tradedAt);
+        TradeLeg savedStoLeg = tradeLegRepository.save(stoLeg);
+        positionService.applyLeg(savedStoLeg);
+
+        return List.of(toResponse(savedBtcLeg, savedEntry), toResponse(savedStoLeg, savedEntry));
+    }
+
     public List<TradeLegResponse> listByCampaign(Long campaignId) {
         return tradeLegRepository.findByCampaignIdOrderByTradedAtAsc(campaignId)
                 .stream()
@@ -192,7 +256,8 @@ public class TradeEntryService {
                 leg.getExpiry(),
                 leg.getTradedAt(),
                 entry != null ? entry.getStrategyTag() : null,
-                entry != null ? entry.getNotes() : null
+                entry != null ? entry.getNotes() : null,
+                leg.getClosesLegId()
         );
     }
 }

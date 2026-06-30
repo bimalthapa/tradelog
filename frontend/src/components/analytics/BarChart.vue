@@ -53,7 +53,7 @@ function fmt(v: number): string {
     <!-- Zero line -->
     <line
       v-if="geometry.length"
-      :x1="geometry[0].zeroX" :x2="geometry[0].zeroX"
+      :x1="geometry[0]?.zeroX" :x2="geometry[0]?.zeroX"
       :y1="TOP_PAD" :y2="svgHeight - TOP_PAD"
       stroke="var(--outline-variant)" stroke-width="1"
     />

@@ -7,9 +7,9 @@ import PositionRow from '@/components/campaign/PositionRow.vue'
 import TradeRow from '@/components/campaign/TradeRow.vue'
 import { useTradeLogStore } from '@/stores/tradeLog'
 import { usePriceStore } from '@/stores/priceStore'
-import { saveTrade, saveBatchTrade, updateTrade } from '@/services/tradeService'
+import { saveTrade, saveBatchTrade, updateTrade, rollPosition } from '@/services/tradeService'
 import { closeCampaign } from '@/services/campaignService'
-import type { ParsedTrade, Position, TradeLeg, UpdateTradeRequest } from '@/types/index'
+import type { ParsedTrade, Position, TradeLeg, UpdateTradeRequest, RollTradeRequest } from '@/types/index'
 
 const route      = useRoute()
 const store      = useTradeLogStore()
@@ -26,6 +26,7 @@ const panelError       = ref('')
 const entryBarRef     = ref<InstanceType<typeof TradeEntryBar> | null>(null)
 
 const editingTrade = ref<TradeLeg | null>(null)
+const rollingPosition = ref<Position | null>(null)
 const notesTrade   = ref<TradeLeg | null>(null)
 const notesText    = ref('')
 
@@ -78,6 +79,53 @@ function formatCurrency(value: number | null | undefined): string {
 
 function formatSigned(value: number): string {
   return (value >= 0 ? '+' : '') + formatCurrency(value)
+}
+
+function formatExpiry(isoDate: string): string {
+  const [, month, day] = isoDate.split('-')
+  return `${parseInt(month!)}/${parseInt(day!)}`
+}
+
+const rollMaps = computed(() => {
+  const byEntry = new Map<number, TradeLeg[]>()
+  for (const leg of store.trades) {
+    if (!byEntry.has(leg.tradeEntryId)) byEntry.set(leg.tradeEntryId, [])
+    byEntry.get(leg.tradeEntryId)!.push(leg)
+  }
+  const btcToSto = new Map<number, TradeLeg>()
+  const stoToBtc = new Map<number, TradeLeg>()
+  for (const legs of byEntry.values()) {
+    const btcLeg = legs.find(l => l.action === 'BTC' && l.closesLegId != null)
+    const stoLeg = legs.find(l => l.action === 'STO')
+    if (btcLeg && stoLeg) {
+      btcToSto.set(btcLeg.id, stoLeg)
+      stoToBtc.set(stoLeg.id, btcLeg)
+    }
+  }
+  return { btcToSto, stoToBtc }
+})
+
+function getTradeRollTooltip(trade: TradeLeg): string | undefined {
+  const { btcToSto, stoToBtc } = rollMaps.value
+  if (trade.action === 'BTC' && btcToSto.has(trade.id)) {
+    const sto = btcToSto.get(trade.id)!
+    const type = sto.optionType === 'CALL' ? 'C' : 'P'
+    return `Rolled → ${sto.strike}${type} ${formatExpiry(sto.expiry!)} @${sto.price.toFixed(2)}`
+  }
+  if (trade.action === 'STO' && stoToBtc.has(trade.id)) {
+    const btc = stoToBtc.get(trade.id)!
+    const type = btc.optionType === 'CALL' ? 'C' : 'P'
+    return `Rolled from ${btc.strike}${type} ${formatExpiry(btc.expiry!)} @${btc.price.toFixed(2)}`
+  }
+  return undefined
+}
+
+function getPositionRollTooltip(position: Position): string | undefined {
+  if (position.openingLegId == null) return undefined
+  const btcLeg = rollMaps.value.stoToBtc.get(position.openingLegId)
+  if (!btcLeg) return undefined
+  const type = btcLeg.optionType === 'CALL' ? 'C' : 'P'
+  return `Rolled from ${btcLeg.strike}${type} ${formatExpiry(btcLeg.expiry!)}`
 }
 
 function onParsed(payload: { trade: ParsedTrade; rawInput: string } | { trades: ParsedTrade[]; rawInputs: string[]; isMultiLeg: true }) {
@@ -160,6 +208,7 @@ function onCancel() {
   pendingRawInputs.value = []
   closingPosition.value  = null
   editingTrade.value     = null
+  rollingPosition.value  = null
   panelError.value       = ''
   if (!wasClose && !wasEdit) entryBarRef.value?.clearInput()
 }
@@ -179,6 +228,44 @@ function onClosePosition(position: Position) {
   editingTrade.value    = null
   closingPosition.value = position
   panelError.value      = ''
+}
+
+function onRollPosition(position: Position) {
+  parsedTrade.value      = null
+  parsedTrades.value     = []
+  closingPosition.value  = null
+  editingTrade.value     = null
+  rollingPosition.value  = position
+  panelError.value       = ''
+}
+
+async function onRollSave(payload: {
+  qty: number; btcPrice: number; newStrike: number; newExpiry: string
+  stoPrice: number; tradeDate: string; notes: string
+}) {
+  if (saving.value) return
+  saving.value = true
+  panelError.value = ''
+  try {
+    await rollPosition({
+      campaignId: campaignId.value,
+      positionId: rollingPosition.value!.id,
+      qty:        payload.qty,
+      btcPrice:   payload.btcPrice,
+      newStrike:  payload.newStrike,
+      newExpiry:  payload.newExpiry,
+      stoPrice:   payload.stoPrice,
+      tradedAt:   payload.tradeDate,
+      notes:      payload.notes,
+    })
+    rollingPosition.value = null
+    const id = campaignId.value
+    await Promise.all([store.fetchCampaign(id), store.fetchTrades(id), store.fetchPositions(id)])
+  } catch (e) {
+    panelError.value = e instanceof Error ? e.message : 'Failed to save roll'
+  } finally {
+    saving.value = false
+  }
 }
 
 function onEditTrade(trade: TradeLeg) {
@@ -350,7 +437,14 @@ async function saveAccount() {
             </tr>
           </thead>
           <tbody>
-            <PositionRow v-for="pos in store.openPositions" :key="pos.id" :position="pos" @close="onClosePosition" />
+            <PositionRow
+              v-for="pos in store.openPositions"
+              :key="pos.id"
+              :position="pos"
+              :roll-tooltip="getPositionRollTooltip(pos)"
+              @close="onClosePosition"
+              @roll="onRollPosition"
+            />
           </tbody>
         </table>
       </div>
@@ -376,7 +470,14 @@ async function saveAccount() {
           </thead>
           <tbody>
             <template v-if="store.trades.length > 0">
-              <TradeRow v-for="trade in store.trades" :key="trade.id" :trade="trade" @edit="onEditTrade" @notes="onNotesTrade" />
+              <TradeRow
+                v-for="trade in store.trades"
+                :key="trade.id"
+                :trade="trade"
+                :roll-tooltip="getTradeRollTooltip(trade)"
+                @edit="onEditTrade"
+                @notes="onNotesTrade"
+              />
             </template>
             <template v-else>
               <tr>
@@ -427,6 +528,15 @@ async function saveAccount() {
         :save-error="panelError"
         :saving="saving"
         @save="onSave"
+        @cancel="onCancel"
+      />
+      <ConfirmPanel
+        v-else-if="rollingPosition"
+        mode="roll"
+        :rolling-position="rollingPosition"
+        :save-error="panelError"
+        :saving="saving"
+        @roll="onRollSave"
         @cancel="onCancel"
       />
 

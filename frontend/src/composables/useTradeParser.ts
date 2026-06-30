@@ -20,7 +20,13 @@ export function parseTrade(input: string): ParsedTrade {
 
   const optMatch = raw.match(OPTIONS_RE)
   if (optMatch) {
-    const [, action, qtyStr, ticker, strikeStr, optCode, expiry, priceStr] = optMatch
+    const action   = optMatch[1]!
+    const qtyStr   = optMatch[2]!
+    const ticker   = optMatch[3]!
+    const strikeStr = optMatch[4]!
+    const optCode  = optMatch[5]!
+    const expiry   = optMatch[6]!
+    const priceStr = optMatch[7]!
     const qty = parseInt(qtyStr, 10)
     const price = parseFloat(priceStr)
     const strike = parseInt(strikeStr, 10)
@@ -45,7 +51,10 @@ export function parseTrade(input: string): ParsedTrade {
 
   const stkMatch = raw.match(STOCK_RE)
   if (stkMatch) {
-    const [, action, qtyStr, ticker, priceStr] = stkMatch
+    const action   = stkMatch[1]!
+    const qtyStr   = stkMatch[2]!
+    const ticker   = stkMatch[3]!
+    const priceStr = stkMatch[4]!
     const qty = parseInt(qtyStr, 10)
     const price = parseFloat(priceStr)
     const rawA = action.toUpperCase()

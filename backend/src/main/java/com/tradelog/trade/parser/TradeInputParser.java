@@ -63,7 +63,7 @@ public class TradeInputParser {
                 price, cashFlow, strategy, true, null);
     }
 
-    private LocalDate parseExpiry(String s) {
+    public LocalDate parseExpiry(String s) {
         String[] p = s.split("/");
         int month = Integer.parseInt(p[0]);
         int day = Integer.parseInt(p[1]);

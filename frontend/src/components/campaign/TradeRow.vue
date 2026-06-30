@@ -6,7 +6,7 @@ const emit = defineEmits<{
   notes: [trade: TradeLeg]
 }>()
 
-defineProps<{ trade: TradeLeg }>()
+defineProps<{ trade: TradeLeg; rollTooltip?: string }>()
 
 function formatExpiry(isoDate: string): string {
   const [, month, day] = isoDate.split('-')
@@ -53,6 +53,7 @@ function legStatusClass(action: TradeLeg['action']): string {
         {{ trade.strike }}{{ trade.optionType === 'CALL' ? 'C' : 'P' }} {{ formatExpiry(trade.expiry!) }}
       </span>
       <span v-else class="instr-detail mono">STOCK</span>
+      <span v-if="rollTooltip" class="roll-badge" :title="rollTooltip">↻</span>
     </td>
     <td class="cell mono">${{ trade.price.toFixed(2) }}</td>
     <td class="cell">
@@ -161,5 +162,13 @@ function legStatusClass(action: TradeLeg['action']): string {
 .btn-icon:hover {
   opacity: 1 !important;
   color: var(--primary);
+}
+
+.roll-badge {
+  font-size: 11px;
+  color: var(--primary);
+  margin-left: 6px;
+  cursor: default;
+  opacity: 0.7;
 }
 </style>
