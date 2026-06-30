@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { ParsedTrade, Position, TradeLeg } from '@/types/index'
+import { detectMultiLegStrategy } from '@/composables/useTradeParser'
 
 const props = defineProps<{
   mode: 'parse' | 'close' | 'edit'
   trade?: ParsedTrade
+  trades?: ParsedTrade[]
   position?: Position
   tradeLeg?: TradeLeg
   saveError?: string
@@ -31,6 +33,23 @@ watch(() => props.trade, (t) => {
     tradeDate.value   = todayDisplayDate()
   }
 })
+
+watch(() => props.trades, (legs) => {
+  if (legs && legs.length > 0) {
+    strategyTag.value = detectMultiLegStrategy(legs)
+    notes.value       = ''
+    tradeDate.value   = todayDisplayDate()
+  }
+})
+
+const netCashFlow = computed(() =>
+  (props.trades ?? []).reduce((sum, l) => sum + l.cashFlow, 0)
+)
+
+function optionLabel(leg: ParsedTrade): string {
+  if (leg.instrumentType !== 'OPTION') return '—'
+  return `$${leg.strike}${leg.optionType === 'CALL' ? 'C' : 'P'}`
+}
 
 watch(() => props.position, (p) => {
   if (p) {
@@ -161,8 +180,58 @@ function handleSave() {
 
       <div class="dialog-body">
 
+        <!-- Multi-leg parse mode -->
+        <template v-if="mode === 'parse' && trades && trades.length > 0">
+          <table class="legs-table">
+            <thead>
+              <tr class="legs-thead">
+                <th class="legs-th">ACTION</th>
+                <th class="legs-th">QTY</th>
+                <th class="legs-th">TICKER</th>
+                <th class="legs-th">STRIKE</th>
+                <th class="legs-th">EXPIRY</th>
+                <th class="legs-th">PRICE</th>
+                <th class="legs-th legs-cash">CASH FLOW</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(leg, i) in trades" :key="i" class="legs-row">
+                <td class="legs-td">{{ leg.action }}</td>
+                <td class="legs-td">{{ leg.qty }}</td>
+                <td class="legs-td">{{ leg.ticker }}</td>
+                <td class="legs-td">{{ optionLabel(leg) }}</td>
+                <td class="legs-td">{{ leg.expiry ?? '—' }}</td>
+                <td class="legs-td">{{ formatCurrency(leg.price) }}</td>
+                <td class="legs-td legs-cash" :class="leg.cashFlow >= 0 ? 'profit' : 'loss'">
+                  {{ leg.cashFlow >= 0 ? '+' : '' }}{{ formatCurrency(leg.cashFlow) }}
+                </td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="legs-net-row">
+                <td class="legs-td" colspan="5"></td>
+                <td class="legs-td legs-net-label">NET</td>
+                <td class="legs-td legs-cash" :class="netCashFlow >= 0 ? 'profit' : 'loss'">
+                  {{ netCashFlow >= 0 ? '+' : '' }}{{ formatCurrency(netCashFlow) }}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div class="divider" />
+
+          <label class="input-label" for="ml-trade-date">TRADE DATE</label>
+          <input id="ml-trade-date" v-model="tradeDate" type="text" class="text-input" placeholder="MM/DD/YYYY" />
+
+          <label class="input-label" for="ml-strategy">STRATEGY</label>
+          <input id="ml-strategy" v-model="strategyTag" type="text" class="text-input" placeholder="Bull Put Spread, Iron Condor…" />
+
+          <label class="input-label" for="ml-notes">NOTES</label>
+          <textarea id="ml-notes" v-model="notes" class="notes-textarea" rows="3" placeholder="Optional notes…" />
+        </template>
+
         <!-- Parse mode -->
-        <template v-if="mode === 'parse' && trade">
+        <template v-else-if="mode === 'parse' && trade">
           <div class="field-grid">
             <div class="field-cell">
               <span class="field-label">ACTION</span>
@@ -552,4 +621,48 @@ function handleSave() {
 
 .btn-save:hover:not(:disabled) { filter: brightness(1.1); }
 .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.legs-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.legs-thead { background: var(--surface-container-low); }
+
+.legs-th {
+  padding: 4px 8px;
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+}
+
+.legs-td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--outline-variant);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--on-surface);
+  white-space: nowrap;
+}
+
+.legs-cash { text-align: right; }
+
+.legs-net-row .legs-td {
+  border-bottom: none;
+  border-top: 1px solid var(--outline-variant);
+  font-weight: 700;
+}
+
+.legs-net-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--on-surface-variant);
+  text-align: right;
+}
 </style>

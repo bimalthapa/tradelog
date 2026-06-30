@@ -76,3 +76,64 @@ export function parseTrade(input: string): ParsedTrade {
     error: 'Could not parse. Try: STO 5 SPY 480C 12/20 @2.35',
   }
 }
+
+export function parseMulti(input: string): ParsedTrade[] {
+  return input.split(',').map(segment => {
+    const trimmed = segment.trim()
+    if (!trimmed) {
+      return {
+        action: '', qty: 0, ticker: '', instrumentType: 'STOCK' as const,
+        price: 0, cashFlow: 0, strategy: '', valid: false, error: 'empty input',
+      }
+    }
+    return parseTrade(trimmed)
+  })
+}
+
+export function detectMultiLegStrategy(legs: ParsedTrade[]): string {
+  if (legs.some(l => !l.valid)) return ''
+  if (legs.some(l => l.instrumentType !== 'OPTION')) return ''
+
+  if (legs.length === 2) {
+    const [a, b] = legs as [ParsedTrade, ParsedTrade]
+    // Bull Put Spread: STO higher put + BTO lower put (credit spread)
+    if (a.action === 'STO' && a.optionType === 'PUT' &&
+        b.action === 'BTO' && b.optionType === 'PUT' &&
+        a.expiry === b.expiry && a.strike! > b.strike!)
+      return 'Bull Put Spread'
+    // Bear Call Spread: STO lower call + BTO higher call (credit spread)
+    if (a.action === 'STO' && a.optionType === 'CALL' &&
+        b.action === 'BTO' && b.optionType === 'CALL' &&
+        a.expiry === b.expiry && a.strike! < b.strike!)
+      return 'Bear Call Spread'
+    // Debit Put Spread: BTO higher put + STO lower put (debit spread)
+    if (a.action === 'BTO' && a.optionType === 'PUT' &&
+        b.action === 'STO' && b.optionType === 'PUT' &&
+        a.expiry === b.expiry && a.strike! > b.strike!)
+      return 'Debit Put Spread'
+    // Debit Call Spread: BTO lower call + STO higher call (debit spread)
+    if (a.action === 'BTO' && a.optionType === 'CALL' &&
+        b.action === 'STO' && b.optionType === 'CALL' &&
+        a.expiry === b.expiry && a.strike! < b.strike!)
+      return 'Debit Call Spread'
+    // Calendar Spread: same ticker + type + strike, different expiry
+    if (a.ticker === b.ticker && a.optionType === b.optionType &&
+        a.strike === b.strike && a.expiry !== b.expiry)
+      return 'Calendar Spread'
+  }
+
+  if (legs.length === 4) {
+    // Sort by strike; Iron Condor = BTO put (lowest), STO put, STO call, BTO call (highest)
+    const sorted = [...legs].sort((a, b) => (a.strike ?? 0) - (b.strike ?? 0))
+    const [l1, l2, l3, l4] = sorted as [ParsedTrade, ParsedTrade, ParsedTrade, ParsedTrade]
+    const sameExpiry = l1.expiry === l2.expiry && l2.expiry === l3.expiry && l3.expiry === l4.expiry
+    const isIronCondor =
+      l1.optionType === 'PUT'  && l1.action === 'BTO' &&
+      l2.optionType === 'PUT'  && l2.action === 'STO' &&
+      l3.optionType === 'CALL' && l3.action === 'STO' &&
+      l4.optionType === 'CALL' && l4.action === 'BTO'
+    if (sameExpiry && isIronCondor) return 'Iron Condor'
+  }
+
+  return ''
+}

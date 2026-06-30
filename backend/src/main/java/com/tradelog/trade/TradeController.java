@@ -2,6 +2,7 @@ package com.tradelog.trade;
 
 import com.tradelog.trade.dto.ParseTradeRequest;
 import com.tradelog.trade.dto.ParseTradeResponse;
+import com.tradelog.trade.dto.BatchSaveTradeRequest;
 import com.tradelog.trade.dto.SaveTradeRequest;
 import com.tradelog.trade.dto.TradeLegResponse;
 import com.tradelog.trade.dto.UpdateTradeRequest;
@@ -34,6 +35,11 @@ public class TradeController {
     @PostMapping
     public TradeLegResponse save(@RequestBody SaveTradeRequest req) {
         return tradeEntryService.save(req);
+    }
+
+    @PostMapping("/batch")
+    public List<TradeLegResponse> saveBatch(@RequestBody BatchSaveTradeRequest req) {
+        return tradeEntryService.saveBatch(req);
     }
 
     @PatchMapping("/{id}")

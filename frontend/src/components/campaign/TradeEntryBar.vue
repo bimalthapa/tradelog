@@ -1,27 +1,42 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { parseTrade } from '@/composables/useTradeParser'
+import { parseTrade, parseMulti } from '@/composables/useTradeParser'
 import type { ParsedTrade } from '@/types/index'
 
-const emit = defineEmits<{ parsed: [{ trade: ParsedTrade; rawInput: string }] }>()
+type SingleLegPayload = { trade: ParsedTrade; rawInput: string }
+type MultiLegPayload  = { trades: ParsedTrade[]; rawInputs: string[]; isMultiLeg: true }
 
-const rawInput  = ref('')
-const error     = ref('')
-const flashing  = ref(false)
+const emit = defineEmits<{ parsed: [SingleLegPayload | MultiLegPayload] }>()
+
+const rawInput = ref('')
+const error    = ref('')
+const flashing = ref(false)
 
 function handleParse() {
-  const result = parseTrade(rawInput.value)
-  if (!result.valid) {
-    error.value = result.error ?? 'Could not parse trade input.'
-  } else {
+  if (rawInput.value.includes(',')) {
+    const rawInputs = rawInput.value.split(',').map(s => s.trim())
+    const trades    = parseMulti(rawInput.value)
+    const firstBad  = trades.findIndex(t => !t.valid)
+    if (firstBad !== -1) {
+      error.value = `Leg ${firstBad + 1}: ${trades[firstBad]!.error ?? 'Could not parse.'}`
+      return
+    }
     error.value = ''
-    emit('parsed', { trade: result, rawInput: rawInput.value })
+    emit('parsed', { trades, rawInputs, isMultiLeg: true })
+  } else {
+    const result = parseTrade(rawInput.value)
+    if (!result.valid) {
+      error.value = result.error ?? 'Could not parse trade input.'
+    } else {
+      error.value = ''
+      emit('parsed', { trade: result, rawInput: rawInput.value })
+    }
   }
 }
 
 function clearInput() {
   rawInput.value = ''
-  error.value = ''
+  error.value    = ''
 }
 
 function triggerFlash() {
@@ -58,6 +73,10 @@ defineExpose({ triggerFlash, clearInput })
       <div class="syntax-row">
         <span class="syntax-label">STOCK</span>
         <span class="syntax-example">BTO 100 NVDA @820.00</span>
+      </div>
+      <div class="syntax-row">
+        <span class="syntax-label">SPREAD</span>
+        <span class="syntax-example">STO 5 SPY 480P 12/20 @2.35, BTO 5 SPY 475P 12/20 @0.85</span>
       </div>
     </div>
     <p v-if="error" class="error-msg">{{ error }}</p>

@@ -20,6 +20,25 @@ export async function saveTrade(req: SaveTradeRequest): Promise<TradeLeg> {
   })
 }
 
+export async function saveBatchTrade(req: {
+  campaignId: number
+  rawInputs: string[]
+  strategyTag: string
+  notes: string
+  tradedAt: string
+}): Promise<TradeLeg[]> {
+  const res = await fetch('/api/v1/trades/batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || `Batch save failed: ${res.status}`)
+  }
+  return res.json()
+}
+
 export async function updateTrade(id: number, req: UpdateTradeRequest): Promise<TradeLeg> {
   return request<TradeLeg>(`${BASE}/${id}`, {
     method: 'PATCH',

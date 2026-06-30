@@ -5,6 +5,7 @@ import com.tradelog.campaign.CampaignRepository;
 import com.tradelog.common.exception.BadRequestException;
 import com.tradelog.common.exception.ResourceNotFoundException;
 import com.tradelog.position.PositionService;
+import com.tradelog.trade.dto.BatchSaveTradeRequest;
 import com.tradelog.trade.dto.SaveTradeRequest;
 import com.tradelog.trade.dto.TradeLegResponse;
 import com.tradelog.trade.dto.UpdateTradeRequest;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -72,6 +74,46 @@ public class TradeEntryService {
         positionService.applyLeg(savedLeg);
 
         return toResponse(savedLeg, savedEntry);
+    }
+
+    @Transactional
+    public List<TradeLegResponse> saveBatch(BatchSaveTradeRequest req) {
+        campaignRepository.findById(req.campaignId())
+                .orElseThrow(() -> new ResourceNotFoundException("Campaign not found: " + req.campaignId()));
+
+        TradeEntry entry = new TradeEntry();
+        entry.setCampaignId(req.campaignId());
+        entry.setEnteredAt(LocalDateTime.now());
+        entry.setRawInput(String.join(", ", req.rawInputs()));
+        entry.setNotes(req.notes());
+        entry.setStrategyTag(req.strategyTag() != null && !req.strategyTag().isBlank()
+                ? req.strategyTag() : null);
+        TradeEntry savedEntry = tradeEntryRepository.save(entry);
+
+        List<TradeLegResponse> responses = new ArrayList<>();
+        for (String rawInput : req.rawInputs()) {
+            ParsedTradeInput parsed = parser.parse(rawInput);
+            if (!parsed.valid()) {
+                throw new IllegalArgumentException("Invalid leg: " + rawInput + " — " + parsed.error());
+            }
+            TradeLeg leg = new TradeLeg();
+            leg.setTradeEntryId(savedEntry.getId());
+            leg.setCampaignId(req.campaignId());
+            leg.setInstrumentType(parsed.instrumentType());
+            leg.setAction(parsed.action());
+            leg.setTicker(parsed.ticker());
+            leg.setQuantity(parsed.qty());
+            leg.setPrice(parsed.price());
+            leg.setNetCashFlow(parsed.cashFlow());
+            leg.setOptionType(parsed.optionType());
+            leg.setStrike(parsed.strike());
+            leg.setExpiry(parsed.expiry());
+            leg.setTradedAt(req.tradedAt() != null ? req.tradedAt() : LocalDate.now());
+            TradeLeg savedLeg = tradeLegRepository.save(leg);
+            positionService.applyLeg(savedLeg);
+            responses.add(toResponse(savedLeg, savedEntry));
+        }
+        return responses;
     }
 
     public List<TradeLegResponse> listByCampaign(Long campaignId) {

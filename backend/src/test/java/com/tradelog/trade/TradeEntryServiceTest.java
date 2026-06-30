@@ -219,4 +219,93 @@ class TradeEntryServiceTest {
 
         assertThat(results).isEmpty();
     }
+
+    // ── saveBatch() tests ─────────────────────────────────────────────────────
+
+    @Test
+    void saveBatch_throwsNotFound_whenCampaignMissing() {
+        when(campaignRepository.findById(99L)).thenReturn(Optional.empty());
+
+        var req = new com.tradelog.trade.dto.BatchSaveTradeRequest(
+                99L, List.of("STO 5 SPY 480P 12/20 @2.35"), null, null, null);
+
+        assertThatThrownBy(() -> service.saveBatch(req))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("99");
+    }
+
+    @Test
+    void saveBatch_createsOneEntryAndTwoLegs_andCallsApplyLegTwice() {
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(new Campaign()));
+
+        ParsedTradeInput stoLeg = new ParsedTradeInput(
+                "STO", 5, "SPY", "OPTION", "CALL",
+                480.0, LocalDate.of(2026, 12, 20), 2.35, 1175.0, "CC", true, null);
+        ParsedTradeInput btoLeg = new ParsedTradeInput(
+                "BTO", 5, "SPY", "OPTION", "CALL",
+                485.0, LocalDate.of(2026, 12, 20), 0.85, -425.0, "Long", true, null);
+
+        when(parser.parse("STO 5 SPY 480C 12/20 @2.35")).thenReturn(stoLeg);
+        when(parser.parse("BTO 5 SPY 485C 12/20 @0.85")).thenReturn(btoLeg);
+
+        TradeEntry fakeEntry = makeEntry(10L, 1L, "Bear Call Spread", null);
+        when(tradeEntryRepository.save(any())).thenReturn(fakeEntry);
+
+        TradeLeg fakeLeg1 = makeLeg(20L, 10L, 1L);
+        TradeLeg fakeLeg2 = makeLeg(21L, 10L, 1L);
+        when(tradeLegRepository.save(any()))
+                .thenReturn(fakeLeg1)
+                .thenReturn(fakeLeg2);
+
+        var req = new com.tradelog.trade.dto.BatchSaveTradeRequest(
+                1L,
+                List.of("STO 5 SPY 480C 12/20 @2.35", "BTO 5 SPY 485C 12/20 @0.85"),
+                "Bear Call Spread", null, LocalDate.now());
+
+        List<TradeLegResponse> responses = service.saveBatch(req);
+
+        verify(tradeEntryRepository, times(1)).save(any(TradeEntry.class));
+        verify(tradeLegRepository, times(2)).save(any(TradeLeg.class));
+        verify(positionService, times(2)).applyLeg(any(TradeLeg.class));
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).tradeEntryId()).isEqualTo(10L);
+        assertThat(responses.get(1).tradeEntryId()).isEqualTo(10L);
+    }
+
+    @Test
+    void saveBatch_throwsIllegalArgument_whenAnyLegInvalid() {
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(new Campaign()));
+        when(parser.parse("STO 5 SPY 480C 12/20 @2.35")).thenReturn(validOptionParsed());
+        when(parser.parse("garbage")).thenReturn(ParsedTradeInput.invalid("Unrecognized trade format"));
+
+        when(tradeEntryRepository.save(any())).thenReturn(makeEntry(10L, 1L, null, null));
+        when(tradeLegRepository.save(any())).thenReturn(makeLeg(20L, 10L, 1L));
+
+        var req = new com.tradelog.trade.dto.BatchSaveTradeRequest(
+                1L, List.of("STO 5 SPY 480C 12/20 @2.35", "garbage"), null, null, null);
+
+        assertThatThrownBy(() -> service.saveBatch(req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("garbage");
+    }
+
+    @Test
+    void saveBatch_storedRawInputIsLegsJoinedWithComma() {
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(new Campaign()));
+        when(parser.parse(any())).thenReturn(validOptionParsed());
+
+        ArgumentCaptor<TradeEntry> entryCaptor = ArgumentCaptor.forClass(TradeEntry.class);
+        TradeEntry fakeEntry = makeEntry(10L, 1L, null, null);
+        when(tradeEntryRepository.save(entryCaptor.capture())).thenReturn(fakeEntry);
+        when(tradeLegRepository.save(any())).thenReturn(makeLeg(20L, 10L, 1L));
+
+        var req = new com.tradelog.trade.dto.BatchSaveTradeRequest(
+                1L,
+                List.of("STO 5 SPY 480C 12/20 @2.35", "BTO 5 SPY 485C 12/20 @0.85"),
+                null, null, null);
+        service.saveBatch(req);
+
+        assertThat(entryCaptor.getValue().getRawInput())
+                .isEqualTo("STO 5 SPY 480C 12/20 @2.35, BTO 5 SPY 485C 12/20 @0.85");
+    }
 }

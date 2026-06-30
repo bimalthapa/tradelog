@@ -7,7 +7,7 @@ import PositionRow from '@/components/campaign/PositionRow.vue'
 import TradeRow from '@/components/campaign/TradeRow.vue'
 import { useTradeLogStore } from '@/stores/tradeLog'
 import { usePriceStore } from '@/stores/priceStore'
-import { saveTrade, updateTrade } from '@/services/tradeService'
+import { saveTrade, saveBatchTrade, updateTrade } from '@/services/tradeService'
 import { closeCampaign } from '@/services/campaignService'
 import type { ParsedTrade, Position, TradeLeg, UpdateTradeRequest } from '@/types/index'
 
@@ -19,8 +19,10 @@ const loading         = ref(true)
 const saving          = ref(false)
 const parsedTrade     = ref<ParsedTrade | null>(null)
 const closingPosition = ref<Position | null>(null)
-const pendingRawInput = ref('')
-const panelError      = ref('')
+const pendingRawInput  = ref('')
+const parsedTrades     = ref<ParsedTrade[]>([])
+const pendingRawInputs = ref<string[]>([])
+const panelError       = ref('')
 const entryBarRef     = ref<InstanceType<typeof TradeEntryBar> | null>(null)
 
 const editingTrade = ref<TradeLeg | null>(null)
@@ -78,10 +80,19 @@ function formatSigned(value: number): string {
   return (value >= 0 ? '+' : '') + formatCurrency(value)
 }
 
-function onParsed({ trade, rawInput }: { trade: ParsedTrade; rawInput: string }) {
-  parsedTrade.value = trade
-  pendingRawInput.value = rawInput
+function onParsed(payload: { trade: ParsedTrade; rawInput: string } | { trades: ParsedTrade[]; rawInputs: string[]; isMultiLeg: true }) {
   panelError.value = ''
+  if ('isMultiLeg' in payload) {
+    parsedTrades.value     = payload.trades
+    pendingRawInputs.value = payload.rawInputs
+    parsedTrade.value      = null
+    pendingRawInput.value  = ''
+  } else {
+    parsedTrade.value      = payload.trade
+    pendingRawInput.value  = payload.rawInput
+    parsedTrades.value     = []
+    pendingRawInputs.value = []
+  }
 }
 
 async function onSave({ strategyTag, notes, tradeDate, qty, exitPrice }: {
@@ -105,18 +116,32 @@ async function onSave({ strategyTag, notes, tradeDate, qty, exitPrice }: {
       await Promise.all([store.fetchCampaign(id), store.fetchTrades(id), store.fetchPositions(id)])
       return
     }
-    let rawInput: string
-    if (isClose && closingPosition.value && qty != null && exitPrice != null) {
-      rawInput = buildCloseRawInput(closingPosition.value, qty, exitPrice)
-    } else {
-      rawInput = pendingRawInput.value
-    }
-    await saveTrade({ campaignId: campaignId.value, rawInput, strategyTag, notes, tradedAt: tradeDate })
-    parsedTrade.value     = null
-    closingPosition.value = null
-    if (!isClose) {
+    if (pendingRawInputs.value.length > 0) {
+      await saveBatchTrade({
+        campaignId: campaignId.value,
+        rawInputs:  pendingRawInputs.value,
+        strategyTag,
+        notes,
+        tradedAt:   tradeDate,
+      })
+      parsedTrades.value     = []
+      pendingRawInputs.value = []
       entryBarRef.value?.triggerFlash()
       entryBarRef.value?.clearInput()
+    } else {
+      let rawInput: string
+      if (isClose && closingPosition.value && qty != null && exitPrice != null) {
+        rawInput = buildCloseRawInput(closingPosition.value, qty, exitPrice)
+      } else {
+        rawInput = pendingRawInput.value
+      }
+      await saveTrade({ campaignId: campaignId.value, rawInput, strategyTag, notes, tradedAt: tradeDate })
+      parsedTrade.value     = null
+      closingPosition.value = null
+      if (!isClose) {
+        entryBarRef.value?.triggerFlash()
+        entryBarRef.value?.clearInput()
+      }
     }
     const id = campaignId.value
     await Promise.all([store.fetchCampaign(id), store.fetchTrades(id), store.fetchPositions(id)])
@@ -128,12 +153,14 @@ async function onSave({ strategyTag, notes, tradeDate, qty, exitPrice }: {
 }
 
 function onCancel() {
-  const wasClose        = closingPosition.value != null
-  const wasEdit         = editingTrade.value != null
-  parsedTrade.value     = null
-  closingPosition.value = null
-  editingTrade.value    = null
-  panelError.value      = ''
+  const wasClose = closingPosition.value != null
+  const wasEdit  = editingTrade.value != null
+  parsedTrade.value      = null
+  parsedTrades.value     = []
+  pendingRawInputs.value = []
+  closingPosition.value  = null
+  editingTrade.value     = null
+  panelError.value       = ''
   if (!wasClose && !wasEdit) entryBarRef.value?.clearInput()
 }
 
@@ -367,7 +394,16 @@ async function saveAccount() {
       </div>
 
       <ConfirmPanel
-        v-if="parsedTrade"
+        v-if="parsedTrades.length > 0"
+        mode="parse"
+        :trades="parsedTrades"
+        :save-error="panelError"
+        :saving="saving"
+        @save="onSave"
+        @cancel="onCancel"
+      />
+      <ConfirmPanel
+        v-else-if="parsedTrade"
         mode="parse"
         :trade="parsedTrade"
         :save-error="panelError"
