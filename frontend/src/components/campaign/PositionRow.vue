@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Position } from '@/types/index'
+import { computeDte } from '@/utils/dte'
 
 const props = defineProps<{ position: Position; rollTooltip?: string }>()
 const emit  = defineEmits<{ close: [Position]; roll: [Position] }>()
@@ -7,6 +9,26 @@ const emit  = defineEmits<{ close: [Position]; roll: [Position] }>()
 function formatExpiry(isoDate: string): string {
   const [, month, day] = isoDate.split('-')
   return `${parseInt(month!)}/${parseInt(day!)}`
+}
+
+const dte = computed<number | null>(() =>
+  props.position.instrumentType === 'OPTION' && props.position.expiry
+    ? computeDte(props.position.expiry)
+    : null
+)
+
+function dteCssClass(): string {
+  if (dte.value === null) return 'dte-gray'
+  if (dte.value < 0)     return 'dte-gray'
+  if (dte.value <= 7)    return 'dte-red'
+  if (dte.value <= 21)   return 'dte-amber'
+  return 'dte-green'
+}
+
+function dteLabel(): string {
+  if (dte.value === null) return '—'
+  if (dte.value < 0)     return 'EXP'
+  return `${dte.value} DTE`
 }
 </script>
 
@@ -32,6 +54,9 @@ function formatExpiry(isoDate: string): string {
       <span class="status" :class="position.status === 'OPEN' ? 'status-open' : 'status-closed'">
         {{ position.status }}
       </span>
+    </td>
+    <td class="cell" :class="dteCssClass()">
+      <span class="mono">{{ dteLabel() }}</span>
     </td>
     <td class="cell">
       <button
@@ -140,4 +165,9 @@ function formatExpiry(isoDate: string): string {
 }
 
 .btn-roll-pos:hover { border-color: var(--primary); }
+
+.dte-green { color: var(--color-profit); }
+.dte-amber { color: var(--color-warning); }
+.dte-red   { color: var(--color-loss); }
+.dte-gray  { color: var(--outline); }
 </style>

@@ -433,6 +433,7 @@ async function saveAccount() {
               <th class="th">INSTRUMENT</th>
               <th class="th">AVG PRICE</th>
               <th class="th">STATUS</th>
+              <th class="th">DTE</th>
               <th class="th"></th>
             </tr>
           </thead>

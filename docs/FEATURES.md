@@ -11,34 +11,35 @@
 - **Edit trades from history** — Position rebuild on edit `[SHIPPED]`
 - **Multi-leg trade entry** — Comma-separated spread entry (vertical, iron condor, calendar) with compact confirm table and auto-detected strategy tags `[SHIPPED]`
 - **Roll tracking** — Roll button on open option positions, Roll modal, atomic BTC+STO backend, `closes_leg_id` wired, roll badge (↻) with tooltips `[SHIPPED]`
+- **DTE counter on open positions** — DTE column on Open Positions table, color-coded green/amber/red by threshold (>21/>7/≤7), stock positions show `—`, past-expiry shows `EXP` in gray `[SHIPPED]`
 
 ---
 
 ## Tier 1 — Core Workflow Gaps (highest user impact)
 
-1. **Multi-leg trade entry** `[SHIPPED]` — Comma-separated spread entry via the trade entry bar. Saved all legs atomically under one TradeEntry with hybrid strategy auto-detection (Bull Put Spread, Bear Call Spread, Iron Condor, etc.).
+1. **Broker CSV/JSON import** — Manual entry is the #1 friction point. Supporting imports from IBKR, Schwab, Robinhood, TastyTrade, and TWS would dramatically reduce the barrier to getting trade data into the system. Even a generic CSV mapper would be transformative.
 
-2. **Broker CSV/JSON import** — Manual entry is the #1 friction point. Supporting imports from IBKR, Schwab, Robinhood, TastyTrade, and TWS would dramatically reduce the barrier to getting trade data into the system. Even a generic CSV mapper would be transformative.
+2. **Export (CSV + summary PDF)** — Users need to get data *out* for tax filing, sharing with their CPA, or importing into other tools. A campaign-level CSV export of trade legs and a summary report (realized P&L by ticker, short/long-term gain breakdown) would add significant utility.
 
-3. **Roll tracking** `[SHIPPED]` — Roll button on open option positions, Roll modal (BTC + new STO entry), atomic `POST /api/v1/trades/roll` backend, `closes_leg_id` wired on BTC leg, roll badge (↻) with tooltips on Trade History and Open Positions.
-
-4. **Export (CSV + summary PDF)** — Users need to get data *out* for tax filing, sharing with their CPA, or importing into other tools. A campaign-level CSV export of trade legs and a summary report (realized P&L by ticker, short/long-term gain breakdown) would add significant utility.
+3. **50% profit target indicator on open positions** — The #1 management rule in options trading: close at 50% profit. For each open short position, show the entry credit, the 50% target exit price, and the % of profit already captured. Trivially computed from existing position data (avg_price × 0.5), massively actionable — more so than breakeven alone. Lives on the Open Positions table row.
 
 ## Tier 2 — Strategic Depth
 
-5. **Wheel strategy dashboard** — A dedicated view that flips the perspective from "campaigns per ticker" to "wheel cycles": CSP opened → assigned → CC opened → assigned → P&L per complete cycle. This is the killer feature that differentiates TradeLog from a generic trade journal.
+4. **Upcoming expiration alerts** — Visual indicator (sidebar badge or inline banner) when any open option position expires within 7 days. No push notifications needed — a UI flag that appears on app load. A missed short put expiration is a catastrophic event; this is a safety net, not a nice-to-have.
 
-6. **Calendar / expiration radar** — A view showing all open options positions mapped to their expiration dates. Traders need to see what's expiring this week, next week, this month — at a glance. Could live under Analytics or as a new route.
+5. **Breakeven price display on open option positions** — For each open short option position, show the breakeven price (e.g. CSP at 480P with $2.35 premium → breakeven $477.65). Core reference number — traders check this against the current stock price constantly. Computed entirely from existing position data.
 
-7. **Trade journaling (structured notes)** — Beyond the free-text notes field, structured fields like "entry thesis," "exit reason," "lesson learned," and pre-defined tags (earnings, technical breakout, dividend capture, hedge). Turns the app from a transaction log into a learning tool.
+6. **Annualized return on capital (ROC) per trade** — For each closed option position: `(premium_collected / (strike × qty × 100)) × (365 / days_held)`. The primary metric wheel strategy traders use to compare trades across different strikes, expirations, and capital requirements. Should appear on the Trade History row and in Analytics alongside raw P&L.
 
-8. **Advanced metrics** — Win/loss streaks, average hold time per strategy, max drawdown per campaign, Sharpe/MAR ratio, P&L by month calendar heatmap. The current Analytics screen is relatively basic — this is where the Bloomberg-terminal feel could really shine.
+7. **Wheel strategy dashboard** — A dedicated view that flips the perspective from "campaigns per ticker" to "wheel cycles": CSP opened → assigned → CC opened → assigned → P&L per complete cycle. This is the killer feature that differentiates TradeLog from a generic trade journal.
 
-9. **DTE (Days to Expiration) counter on open positions** — Show DTE prominently on each open option position row, computed from `expiry - today`. Color-coded: green (>21 DTE), amber (8–21), red (<7). One of the most-referenced numbers when managing an options book, and trivially computed from existing data.
+8. **Calendar / expiration radar** — A view showing all open options positions mapped to their expiration dates. Traders need to see what's expiring this week, next week, this month — at a glance. Could live under Analytics or as a new route.
 
-10. **Annualized return on capital (ROC) per trade** — For each closed option position: `(premium_collected / (strike × qty × 100)) × (365 / days_held)`. The primary metric wheel strategy traders use to compare trades across different strikes, expirations, and capital requirements. Should appear on the Trade History row and in Analytics alongside raw P&L.
+9. **Basic keyboard shortcuts** — Terminal-aesthetic tools are keyboard-first. Scope: `j`/`k` navigate table rows, `n` opens new campaign from dashboard, `e` focuses the trade entry bar from campaign detail, `Esc` closes any open panel or dialog, `?` shows a shortcuts help overlay. Implemented as a global `keydown` listener composable. Distinct from the command palette (Cmd+K, Tier 4) — this is basic navigation, not search.
 
-11. **Breakeven price display on open option positions** — For each open short option position, show the breakeven price (e.g. CSP at 480P with $2.35 premium → breakeven $477.65). Core reference number — traders check this against the current stock price constantly. Computed entirely from existing position data.
+10. **Trade journaling (structured notes)** — Beyond the free-text notes field, structured fields like "entry thesis," "exit reason," "lesson learned," and pre-defined tags (earnings, technical breakout, dividend capture, hedge). Turns the app from a transaction log into a learning tool.
+
+11. **Advanced metrics** — Win/loss streaks, average hold time per strategy, max drawdown per campaign, Sharpe/MAR ratio, P&L by month calendar heatmap. The current Analytics screen is relatively basic — this is where the Bloomberg-terminal feel could really shine.
 
 ## Tier 3 — Quality of Life
 
@@ -64,21 +65,20 @@
 22. **Command palette (Cmd+K)** — Keyboard-driven quick launcher: navigate to any campaign, open the trade entry bar, jump to Analytics. Deeply aligned with the Bloomberg terminal aesthetic and rewards power users.
 23. **One-click database backup** — A Settings page (or sidebar menu item) that copies `~/tradelog/tradelog.db` to a user-chosen path. Critical for a local-only app where a single file holds all trading history.
 24. **Optional Greeks capture at trade entry** — Optional fields on the Confirm Panel: Delta, Theta, IV at time of entry. Not required — fields can be blank — but allows traders who track these to review them later. Could be stored in `trade_entry.notes` as JSON or a dedicated column.
-25. **Upcoming expiration alerts** — Visual indicator (banner or sidebar badge) when any open option position expires within 7 days. No push notifications needed — a UI flag that appears on app load. Prevents the worst-case scenario: forgetting an open short position until it's too late.
 
 ---
 
 ## Recommended Priority Order
 
-1. Multi-leg trade entry
-2. Broker CSV import
-3. Roll tracking
-4. DTE counter on open positions
-5. Breakeven price on open positions
-6. Annualized ROC per trade
+1. 50% profit target indicator on open positions
+2. Upcoming expiration alerts
+3. Breakeven price on open positions
+4. Annualized ROC per trade
+5. Broker CSV import
+6. Export (CSV + summary report)
 7. Wheel strategy dashboard
-8. Export (CSV + summary report)
-9. Calendar / expiration radar
+8. Calendar / expiration radar
+9. Basic keyboard shortcuts
 10. Custom date range filter on Analytics
 11. Trade journaling + advanced metrics
 12. Global trade search
