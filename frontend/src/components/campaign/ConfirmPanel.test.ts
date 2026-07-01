@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ConfirmPanel from './ConfirmPanel.vue'
-import type { ParsedTrade } from '@/types/index'
+import type { ParsedTrade, Position } from '@/types/index'
 
 const mockTrade: ParsedTrade = {
   action: 'STO', qty: 5, ticker: 'SPY',
@@ -100,5 +100,43 @@ describe('ConfirmPanel — emits', () => {
     await wrapper.find('.btn-save').trigger('click')
     const payload = wrapper.emitted('save')![0]![0] as { strategyTag: string; notes: string }
     expect(payload.notes).toBe('')
+  })
+})
+
+describe('ConfirmPanel — roll mode', () => {
+  const shortPosition: Position = {
+    id: 1, campaignId: 1, instrumentType: 'OPTION', ticker: 'SPY',
+    optionType: 'PUT', strike: 480, expiry: '2026-12-20',
+    openAction: 'STO', openQuantity: 5, avgPrice: 2.35,
+    status: 'OPEN', openedAt: '2026-01-01', openingLegId: 5,
+  }
+  const longPosition: Position = { ...shortPosition, openAction: 'BTO' }
+
+  function mountRoll(position: Position) {
+    return mount(ConfirmPanel, { props: { mode: 'roll', rollingPosition: position } })
+  }
+
+  it('shows BTC as the close action when rolling a short (STO) position', () => {
+    const texts = mountRoll(shortPosition).findAll('.field-value').map(v => v.text())
+    expect(texts).toContain('BTC')
+    expect(texts).not.toContain('STC')
+  })
+
+  it('shows STC as the close action when rolling a long (BTO) position', () => {
+    const texts = mountRoll(longPosition).findAll('.field-value').map(v => v.text())
+    expect(texts).toContain('STC')
+    expect(texts).not.toContain('BTC')
+  })
+
+  it('emits roll with STC/BTO-consistent values when rolling a long position', async () => {
+    const wrapper = mountRoll(longPosition)
+    await wrapper.find('#roll-btc-price').setValue('1.80')
+    await wrapper.find('#roll-new-strike').setValue('470')
+    await wrapper.find('#roll-new-expiry').setValue('1/17')
+    await wrapper.find('#roll-sto-price').setValue('2.10')
+    await wrapper.find('.btn-save').trigger('click')
+    const payload = wrapper.emitted('roll')![0]![0] as { qty: number; btcPrice: number; stoPrice: number }
+    expect(payload.btcPrice).toBe(1.8)
+    expect(payload.stoPrice).toBe(2.1)
   })
 })

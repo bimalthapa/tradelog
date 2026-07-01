@@ -138,18 +138,28 @@ const closeCashFlow = computed((): number | null => {
     :  (qty * price * multiplier)
 })
 
+const rollCloseAction = computed(() =>
+  props.rollingPosition?.openAction === 'STO' ? 'BTC' : 'STC'
+)
+
+const rollOpenAction = computed(() =>
+  props.rollingPosition?.openAction === 'STO' ? 'STO' : 'BTO'
+)
+
 const rollBtcCashFlow = computed((): number | null => {
   const qty   = Number(rollQty.value)
   const price = Number(rollBtcPrice.value)
   if (!qty || !price) return null
-  return -(qty * price * 100)
+  const raw = qty * price * 100
+  return rollCloseAction.value === 'BTC' ? -raw : raw
 })
 
 const rollStoCashFlow = computed((): number | null => {
   const qty   = Number(rollQty.value)
   const price = Number(rollStoPrice.value)
   if (!qty || !price) return null
-  return qty * price * 100
+  const raw = qty * price * 100
+  return rollOpenAction.value === 'BTO' ? -raw : raw
 })
 
 function formatExpiry(iso: string): string {
@@ -503,7 +513,7 @@ function handleSave() {
             </div>
             <div class="field-cell">
               <span class="field-label">ACTION</span>
-              <span class="field-value">BTC</span>
+              <span class="field-value">{{ rollCloseAction }}</span>
             </div>
             <div class="field-cell">
               <span class="field-label">QTY</span>
@@ -513,12 +523,14 @@ function handleSave() {
 
           <div class="divider" />
 
-          <label class="input-label" for="roll-btc-price">BTC PRICE</label>
+          <label class="input-label" for="roll-btc-price">{{ rollCloseAction }} PRICE</label>
           <input id="roll-btc-price" v-model="rollBtcPrice" type="number" min="0" step="0.01" class="text-input" placeholder="0.00" />
 
           <div v-if="rollBtcCashFlow !== null" class="field-cell" style="margin-top: 4px;">
             <span class="field-label">CASH FLOW</span>
-            <span class="field-value loss">{{ formatCurrency(rollBtcCashFlow) }}</span>
+            <span class="field-value" :class="rollBtcCashFlow >= 0 ? 'profit' : 'loss'">
+              {{ rollBtcCashFlow >= 0 ? '+' : '' }}{{ formatCurrency(rollBtcCashFlow) }}
+            </span>
           </div>
 
           <div class="divider" />
@@ -533,12 +545,14 @@ function handleSave() {
           <label class="input-label" for="roll-new-expiry">NEW EXPIRY</label>
           <input id="roll-new-expiry" v-model="rollNewExpiry" type="text" class="text-input" placeholder="MM/DD" />
 
-          <label class="input-label" for="roll-sto-price">STO PRICE</label>
+          <label class="input-label" for="roll-sto-price">{{ rollOpenAction }} PRICE</label>
           <input id="roll-sto-price" v-model="rollStoPrice" type="number" min="0" step="0.01" class="text-input" placeholder="0.00" />
 
           <div v-if="rollStoCashFlow !== null" class="field-cell" style="margin-top: 4px;">
             <span class="field-label">CASH FLOW</span>
-            <span class="field-value profit">+{{ formatCurrency(rollStoCashFlow) }}</span>
+            <span class="field-value" :class="rollStoCashFlow >= 0 ? 'profit' : 'loss'">
+              {{ rollStoCashFlow >= 0 ? '+' : '' }}{{ formatCurrency(rollStoCashFlow) }}
+            </span>
           </div>
 
           <div class="divider" />
@@ -678,6 +692,10 @@ function handleSave() {
   letter-spacing: 0.05em;
   color: var(--on-surface-variant);
   margin-bottom: 4px;
+}
+
+.notes-textarea {
+  flex-shrink: 0;
 }
 
 .text-input,

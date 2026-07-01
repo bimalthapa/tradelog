@@ -143,41 +143,47 @@ public class TradeEntryService {
 
         LocalDate tradedAt = req.tradedAt() != null ? req.tradedAt() : LocalDate.now();
 
-        TradeLeg btcLeg = new TradeLeg();
-        btcLeg.setTradeEntryId(savedEntry.getId());
-        btcLeg.setCampaignId(req.campaignId());
-        btcLeg.setInstrumentType("OPTION");
-        btcLeg.setAction("BTC");
-        btcLeg.setTicker(position.getTicker());
-        btcLeg.setQuantity(req.qty());
-        btcLeg.setPrice(req.btcPrice());
-        btcLeg.setNetCashFlow(-(req.qty() * req.btcPrice() * 100));
-        btcLeg.setOptionType(position.getOptionType());
-        btcLeg.setStrike(position.getStrike());
-        btcLeg.setExpiry(position.getExpiry());
-        btcLeg.setClosesLegId(position.getOpeningLegId());
-        btcLeg.setTradedAt(tradedAt);
-        TradeLeg savedBtcLeg = tradeLegRepository.save(btcLeg);
-        positionService.applyLeg(savedBtcLeg);
+        // A position opened STO (short) is closed by buying it back (BTC) and re-opened STO.
+        // A position opened BTO (long) is closed by selling it (STC) and re-opened BTO.
+        boolean wasShort = "STO".equals(position.getOpenAction());
+        String closeAction = wasShort ? "BTC" : "STC";
+        String openAction  = wasShort ? "STO" : "BTO";
+
+        TradeLeg closeLeg = new TradeLeg();
+        closeLeg.setTradeEntryId(savedEntry.getId());
+        closeLeg.setCampaignId(req.campaignId());
+        closeLeg.setInstrumentType("OPTION");
+        closeLeg.setAction(closeAction);
+        closeLeg.setTicker(position.getTicker());
+        closeLeg.setQuantity(req.qty());
+        closeLeg.setPrice(req.btcPrice());
+        closeLeg.setNetCashFlow(closeAction.startsWith("B") ? -(req.qty() * req.btcPrice() * 100) : req.qty() * req.btcPrice() * 100);
+        closeLeg.setOptionType(position.getOptionType());
+        closeLeg.setStrike(position.getStrike());
+        closeLeg.setExpiry(position.getExpiry());
+        closeLeg.setClosesLegId(position.getOpeningLegId());
+        closeLeg.setTradedAt(tradedAt);
+        TradeLeg savedCloseLeg = tradeLegRepository.save(closeLeg);
+        positionService.applyLeg(savedCloseLeg);
 
         LocalDate newExpiry = parser.parseExpiry(req.newExpiry());
-        TradeLeg stoLeg = new TradeLeg();
-        stoLeg.setTradeEntryId(savedEntry.getId());
-        stoLeg.setCampaignId(req.campaignId());
-        stoLeg.setInstrumentType("OPTION");
-        stoLeg.setAction("STO");
-        stoLeg.setTicker(position.getTicker());
-        stoLeg.setQuantity(req.qty());
-        stoLeg.setPrice(req.stoPrice());
-        stoLeg.setNetCashFlow(req.qty() * req.stoPrice() * 100);
-        stoLeg.setOptionType(position.getOptionType());
-        stoLeg.setStrike(req.newStrike());
-        stoLeg.setExpiry(newExpiry);
-        stoLeg.setTradedAt(tradedAt);
-        TradeLeg savedStoLeg = tradeLegRepository.save(stoLeg);
-        positionService.applyLeg(savedStoLeg);
+        TradeLeg openLeg = new TradeLeg();
+        openLeg.setTradeEntryId(savedEntry.getId());
+        openLeg.setCampaignId(req.campaignId());
+        openLeg.setInstrumentType("OPTION");
+        openLeg.setAction(openAction);
+        openLeg.setTicker(position.getTicker());
+        openLeg.setQuantity(req.qty());
+        openLeg.setPrice(req.stoPrice());
+        openLeg.setNetCashFlow(openAction.startsWith("B") ? -(req.qty() * req.stoPrice() * 100) : req.qty() * req.stoPrice() * 100);
+        openLeg.setOptionType(position.getOptionType());
+        openLeg.setStrike(req.newStrike());
+        openLeg.setExpiry(newExpiry);
+        openLeg.setTradedAt(tradedAt);
+        TradeLeg savedOpenLeg = tradeLegRepository.save(openLeg);
+        positionService.applyLeg(savedOpenLeg);
 
-        return List.of(toResponse(savedBtcLeg, savedEntry), toResponse(savedStoLeg, savedEntry));
+        return List.of(toResponse(savedCloseLeg, savedEntry), toResponse(savedOpenLeg, savedEntry));
     }
 
     public List<TradeLegResponse> listByCampaign(Long campaignId) {

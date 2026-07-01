@@ -400,4 +400,28 @@ class TradeEntryServiceTest {
         assertThat(responses.get(1).action()).isEqualTo("STO");
         assertThat(responses.get(1).closesLegId()).isNull();
     }
+
+    @Test
+    void saveRoll_createsStcAndBtoLegs_whenRollingLongOption() {
+        Position position = makeOpenOptionPosition(10L, 1L, 5L);
+        position.setOpenAction("BTO");
+        when(positionRepository.findById(10L)).thenReturn(Optional.of(position));
+
+        TradeEntry fakeEntry = makeEntry(20L, 1L, "Roll", null);
+        when(tradeEntryRepository.save(any())).thenReturn(fakeEntry);
+
+        ArgumentCaptor<TradeLeg> legCaptor = ArgumentCaptor.forClass(TradeLeg.class);
+        when(tradeLegRepository.save(legCaptor.capture()))
+                .thenReturn(makeLeg(30L, 20L, 1L))
+                .thenReturn(makeLeg(31L, 20L, 1L));
+
+        RollTradeRequest req = new RollTradeRequest(1L, 10L, 5, 1.80, 470.0, "1/17", 2.10, null, null);
+        service.saveRoll(req);
+
+        List<TradeLeg> savedLegs = legCaptor.getAllValues();
+        assertThat(savedLegs.get(0).getAction()).isEqualTo("STC");
+        assertThat(savedLegs.get(0).getNetCashFlow()).isEqualTo(900.0);
+        assertThat(savedLegs.get(1).getAction()).isEqualTo("BTO");
+        assertThat(savedLegs.get(1).getNetCashFlow()).isEqualTo(-1050.0);
+    }
 }
