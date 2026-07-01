@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTradeLogStore } from '@/stores/tradeLog'
 import type { Campaign } from '@/types/index'
@@ -19,6 +19,29 @@ function filterByAccount(campaigns: Campaign[]) {
 
 const activeCampaigns = computed(() => filterByAccount(store.activeCampaigns))
 const closedCampaigns = computed(() => filterByAccount(store.closedCampaigns))
+
+function loadOpenState(key: string, defaultValue: boolean): boolean {
+  const stored = localStorage.getItem(key)
+  if (stored === 'true') return true
+  if (stored === 'false') return false
+  return defaultValue
+}
+
+const ACTIVE_OPEN_KEY = 'tradelog:sidebar-active-open'
+const CLOSED_OPEN_KEY = 'tradelog:sidebar-closed-open'
+
+const activeOpen = ref(loadOpenState(ACTIVE_OPEN_KEY, true))
+const closedOpen = ref(loadOpenState(CLOSED_OPEN_KEY, false))
+
+function toggleActive() {
+  activeOpen.value = !activeOpen.value
+  localStorage.setItem(ACTIVE_OPEN_KEY, String(activeOpen.value))
+}
+
+function toggleClosed() {
+  closedOpen.value = !closedOpen.value
+  localStorage.setItem(CLOSED_OPEN_KEY, String(closedOpen.value))
+}
 </script>
 
 <template>
@@ -40,34 +63,46 @@ const closedCampaigns = computed(() => filterByAccount(store.closedCampaigns))
     <AccountSelector />
 
     <div class="campaigns-area">
-      <div v-if="activeCampaigns.length > 0" class="campaign-section">
-        <div class="section-label">ACTIVE</div>
-        <RouterLink
-          v-for="c in activeCampaigns"
-          :key="c.id"
-          :to="`/campaign/${c.id}`"
-          class="campaign-item"
-          :class="{ 'campaign-item--active': isCurrentCampaign(c.id) }"
-        >
-          <span class="status-dot active"></span>
-          <span class="campaign-ticker">{{ c.ticker }}</span>
-          <span v-if="c.label" class="campaign-item-label">{{ c.label }}</span>
-        </RouterLink>
+      <div v-if="activeCampaigns.length > 0" class="campaign-section" data-section="active">
+        <button class="section-label-btn" @click="toggleActive">
+          <span class="chevron">{{ activeOpen ? '▼' : '▶' }}</span>
+          ACTIVE
+          <span class="count">({{ activeCampaigns.length }})</span>
+        </button>
+        <div v-show="activeOpen" class="campaign-list">
+          <RouterLink
+            v-for="c in activeCampaigns"
+            :key="c.id"
+            :to="`/campaign/${c.id}`"
+            class="campaign-item"
+            :class="{ 'campaign-item--active': isCurrentCampaign(c.id) }"
+          >
+            <span class="status-dot active"></span>
+            <span class="campaign-ticker">{{ c.ticker }}</span>
+            <span v-if="c.label" class="campaign-item-label">{{ c.label }}</span>
+          </RouterLink>
+        </div>
       </div>
 
-      <div v-if="closedCampaigns.length > 0" class="campaign-section">
-        <div class="section-label">CLOSED</div>
-        <RouterLink
-          v-for="c in closedCampaigns"
-          :key="c.id"
-          :to="`/campaign/${c.id}`"
-          class="campaign-item"
-          :class="{ 'campaign-item--active': isCurrentCampaign(c.id) }"
-        >
-          <span class="status-dot closed"></span>
-          <span class="campaign-ticker">{{ c.ticker }}</span>
-          <span v-if="c.label" class="campaign-item-label">{{ c.label }}</span>
-        </RouterLink>
+      <div v-if="closedCampaigns.length > 0" class="campaign-section" data-section="closed">
+        <button class="section-label-btn" @click="toggleClosed">
+          <span class="chevron">{{ closedOpen ? '▼' : '▶' }}</span>
+          CLOSED
+          <span class="count">({{ closedCampaigns.length }})</span>
+        </button>
+        <div v-show="closedOpen" class="campaign-list">
+          <RouterLink
+            v-for="c in closedCampaigns"
+            :key="c.id"
+            :to="`/campaign/${c.id}`"
+            class="campaign-item"
+            :class="{ 'campaign-item--active': isCurrentCampaign(c.id) }"
+          >
+            <span class="status-dot closed"></span>
+            <span class="campaign-ticker">{{ c.ticker }}</span>
+            <span v-if="c.label" class="campaign-item-label">{{ c.label }}</span>
+          </RouterLink>
+        </div>
       </div>
     </div>
 
@@ -161,12 +196,38 @@ const closedCampaigns = computed(() => filterByAccount(store.closedCampaigns))
   margin-top: 16px;
 }
 
-.section-label {
+.section-label-btn {
+  background: none;
+  border: none;
+  padding: 4px 16px;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-ui);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
   color: var(--on-surface-variant);
-  padding: 4px 16px;
+}
+
+.section-label-btn:hover {
+  color: var(--on-surface);
+}
+
+.chevron {
+  color: var(--outline);
+  font-size: 9px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.count {
+  color: var(--outline);
+  font-weight: 400;
 }
 
 .campaign-item {

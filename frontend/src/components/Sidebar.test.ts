@@ -33,12 +33,13 @@ function mountSidebar() {
   setActivePinia(pinia)
   const store = useTradeLogStore()
   store.campaigns = mockCampaigns
-  return { wrapper: mount(Sidebar, { global: { plugins: [pinia], stubs: { RouterLink: routerLinkStub } } }), store }
+  return { wrapper: mount(Sidebar, { global: { plugins: [pinia], stubs: { RouterLink: routerLinkStub } }, attachTo: document.body }), store }
 }
 
 beforeEach(() => {
   routeParams.id = '1'
   vi.clearAllMocks()
+  localStorage.clear()
 })
 
 describe('active campaigns section', () => {
@@ -54,7 +55,7 @@ describe('active campaigns section', () => {
     setActivePinia(pinia)
     const store = useTradeLogStore()
     store.campaigns = mockCampaigns.filter(c => c.status === 'CLOSED')
-    const wrapper = mount(Sidebar, { global: { plugins: [pinia], stubs: { RouterLink: routerLinkStub } } })
+    const wrapper = mount(Sidebar, { global: { plugins: [pinia], stubs: { RouterLink: routerLinkStub } }, attachTo: document.body })
     expect(wrapper.text()).not.toContain('ACTIVE')
   })
 
@@ -98,7 +99,7 @@ describe('closed campaigns section', () => {
     setActivePinia(pinia)
     const store = useTradeLogStore()
     store.campaigns = mockCampaigns.filter(c => c.status === 'OPEN')
-    const wrapper = mount(Sidebar, { global: { plugins: [pinia], stubs: { RouterLink: routerLinkStub } } })
+    const wrapper = mount(Sidebar, { global: { plugins: [pinia], stubs: { RouterLink: routerLinkStub } }, attachTo: document.body })
     expect(wrapper.text()).not.toContain('CLOSED')
   })
 })
@@ -122,5 +123,87 @@ describe('active highlight', () => {
     routeParams.id = undefined
     const { wrapper } = mountSidebar()
     expect(wrapper.findAll('.campaign-item--active')).toHaveLength(0)
+  })
+})
+
+describe('section collapse', () => {
+  it('ACTIVE section list is visible by default (no stored preference)', () => {
+    const { wrapper } = mountSidebar()
+    const activeSection = wrapper.find('[data-section="active"]')
+    const list = activeSection.find('.campaign-list')
+    expect(list.isVisible()).toBe(true)
+    expect(activeSection.find('.chevron').text()).toBe('▼')
+  })
+
+  it('CLOSED section list is collapsed by default (no stored preference)', () => {
+    const { wrapper } = mountSidebar()
+    const closedSection = wrapper.find('[data-section="closed"]')
+    const list = closedSection.find('.campaign-list')
+    expect(list.isVisible()).toBe(false)
+    expect(closedSection.find('.chevron').text()).toBe('▶')
+  })
+
+  it('clicking the ACTIVE header toggles its list without affecting CLOSED', async () => {
+    const { wrapper } = mountSidebar()
+    const activeSection = wrapper.find('[data-section="active"]')
+    const closedSection = wrapper.find('[data-section="closed"]')
+
+    await activeSection.find('.section-label-btn').trigger('click')
+
+    expect(activeSection.find('.campaign-list').isVisible()).toBe(false)
+    expect(activeSection.find('.chevron').text()).toBe('▶')
+    expect(closedSection.find('.campaign-list').isVisible()).toBe(false)
+  })
+
+  it('clicking the CLOSED header toggles its list without affecting ACTIVE', async () => {
+    const { wrapper } = mountSidebar()
+    const activeSection = wrapper.find('[data-section="active"]')
+    const closedSection = wrapper.find('[data-section="closed"]')
+
+    await closedSection.find('.section-label-btn').trigger('click')
+
+    expect(closedSection.find('.campaign-list').isVisible()).toBe(true)
+    expect(closedSection.find('.chevron').text()).toBe('▼')
+    expect(activeSection.find('.campaign-list').isVisible()).toBe(true)
+  })
+
+  it('persists ACTIVE toggle to localStorage', async () => {
+    const { wrapper } = mountSidebar()
+    const activeSection = wrapper.find('[data-section="active"]')
+
+    await activeSection.find('.section-label-btn').trigger('click')
+
+    expect(localStorage.getItem('tradelog:sidebar-active-open')).toBe('false')
+  })
+
+  it('persists CLOSED toggle to localStorage', async () => {
+    const { wrapper } = mountSidebar()
+    const closedSection = wrapper.find('[data-section="closed"]')
+
+    await closedSection.find('.section-label-btn').trigger('click')
+
+    expect(localStorage.getItem('tradelog:sidebar-closed-open')).toBe('true')
+  })
+
+  it('reads a persisted "open" preference for CLOSED on mount', () => {
+    localStorage.setItem('tradelog:sidebar-closed-open', 'true')
+    const { wrapper } = mountSidebar()
+    const closedSection = wrapper.find('[data-section="closed"]')
+    expect(closedSection.find('.campaign-list').isVisible()).toBe(true)
+  })
+
+  it('reads a persisted "collapsed" preference for ACTIVE on mount', () => {
+    localStorage.setItem('tradelog:sidebar-active-open', 'false')
+    const { wrapper } = mountSidebar()
+    const activeSection = wrapper.find('[data-section="active"]')
+    expect(activeSection.find('.campaign-list').isVisible()).toBe(false)
+  })
+
+  it('shows the count of campaigns in each section header', () => {
+    const { wrapper } = mountSidebar()
+    const activeSection = wrapper.find('[data-section="active"]')
+    const closedSection = wrapper.find('[data-section="closed"]')
+    expect(activeSection.find('.count').text()).toBe('(2)')
+    expect(closedSection.find('.count').text()).toBe('(1)')
   })
 })
