@@ -15,11 +15,14 @@ vi.mock('@/services/campaignService', () => ({
   createCampaign: vi.fn(),
 }))
 
+const mockStore = vi.hoisted(() => ({
+  accounts: [] as { id: number; name: string }[],
+  selectedAccountId: 'all' as number | null | 'all',
+  campaigns: [] as Campaign[],
+}))
+
 vi.mock('@/stores/tradeLog', () => ({
-  useTradeLogStore: () => ({
-    accounts: [],
-    selectedAccountId: 'all',
-  }),
+  useTradeLogStore: () => mockStore,
 }))
 
 import { createCampaign } from '@/services/campaignService'
@@ -37,6 +40,7 @@ function mountView() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockStore.campaigns = []
 })
 
 describe('ticker field', () => {
@@ -94,6 +98,15 @@ describe('submit', () => {
     await flushPromises()
     expect(wrapper.find('.api-error').text()).toBe('Server error')
     expect(mockPush).not.toHaveBeenCalled()
+  })
+
+  it('adds the created campaign to the store so the sidebar reflects it without a refresh', async () => {
+    vi.mocked(createCampaign).mockResolvedValue(mockCampaign)
+    const wrapper = mountView()
+    await wrapper.find('input.ticker-input').setValue('SPY')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(mockStore.campaigns).toContainEqual(mockCampaign)
   })
 
   it('disables submit button while in-flight and re-enables on error', async () => {

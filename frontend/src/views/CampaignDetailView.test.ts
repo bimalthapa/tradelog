@@ -4,6 +4,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import CampaignDetailView from './CampaignDetailView.vue'
+import { useTradeLogStore } from '@/stores/tradeLog'
 import type { Campaign, TradeLeg, Position, ParsedTrade } from '@/types/index'
 
 vi.mock('vue-router', () => ({
@@ -404,6 +405,21 @@ describe('close campaign button', () => {
     await flushPromises()
     expect(closeCampaign).toHaveBeenCalledWith(1)
     expect(getCampaign).toHaveBeenCalledTimes(2)
+  })
+
+  it('updates the campaign in the store list so the sidebar reflects CLOSED without a refresh', async () => {
+    setupMocks()
+    vi.mocked(getCampaign)
+      .mockResolvedValueOnce(mockCampaign)
+      .mockResolvedValueOnce({ ...mockCampaign, status: 'CLOSED' as const })
+    vi.mocked(closeCampaign).mockResolvedValue({ ...mockCampaign, status: 'CLOSED' as const })
+    const wrapper = mountView()
+    await flushPromises()
+    const store = useTradeLogStore()
+    store.campaigns = [mockCampaign]
+    await wrapper.find('.btn-close-campaign').trigger('click')
+    await flushPromises()
+    expect(store.campaigns.find(c => c.id === 1)?.status).toBe('CLOSED')
   })
 })
 

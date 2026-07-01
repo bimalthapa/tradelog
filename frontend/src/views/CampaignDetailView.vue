@@ -295,9 +295,12 @@ async function saveNotes() {
 
 async function handleCloseCampaign() {
   if (!campaign.value) return
+  const id = campaign.value.id
   try {
-    await closeCampaign(campaign.value.id)
-    await store.fetchCampaign(campaign.value.id)
+    await closeCampaign(id)
+    await store.fetchCampaign(id)
+    const idx = store.campaigns.findIndex(c => c.id === id)
+    if (idx !== -1 && store.currentCampaign) store.campaigns[idx] = store.currentCampaign
   } catch {
     // badge stays unchanged; user can retry
   }

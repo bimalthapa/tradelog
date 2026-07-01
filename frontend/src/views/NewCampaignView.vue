@@ -42,6 +42,7 @@ async function onSubmit() {
       openedAt: startDate.value,
       accountId: selectedAccountId.value,
     })
+    store.campaigns.push(campaign)
     router.push(`/campaign/${campaign.id}`)
   } catch (e) {
     apiError.value = e instanceof Error ? e.message : 'Request failed'
