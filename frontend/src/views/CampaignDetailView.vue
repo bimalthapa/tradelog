@@ -29,6 +29,7 @@ const editingTrade = ref<TradeLeg | null>(null)
 const rollingPosition = ref<Position | null>(null)
 const notesTrade   = ref<TradeLeg | null>(null)
 const notesText    = ref('')
+const historyOpen  = ref(false)
 
 const campaignId = computed(() => Number(route.params.id))
 
@@ -451,11 +452,12 @@ async function saveAccount() {
       </div>
 
       <div class="section history-section">
-        <div class="section-label">
+        <button class="section-label-btn" @click="historyOpen = !historyOpen">
+          <span class="chevron">{{ historyOpen ? '▼' : '▶' }}</span>
           TRADE HISTORY
           <span class="count">({{ store.trades.length }})</span>
-        </div>
-        <table class="table">
+        </button>
+        <table v-show="historyOpen" class="table">
           <thead>
             <tr class="thead-row">
               <th class="th">DATE</th>
@@ -487,7 +489,7 @@ async function saveAccount() {
             </template>
           </tbody>
         </table>
-        <div class="ncf-footer">
+        <div v-show="historyOpen" class="ncf-footer">
           <span class="ncf-label">NET CASH FLOW</span>
           <span class="ncf-value" :class="netCashFlow >= 0 ? 'profit' : 'loss'">
             {{ formatSigned(netCashFlow) }}
@@ -716,6 +718,33 @@ async function saveAccount() {
 
 .dot   { color: var(--primary); }
 .count { color: var(--outline); font-weight: 400; }
+
+.section-label-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--on-surface-variant);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 8px;
+}
+
+.section-label-btn:hover { color: var(--on-surface); }
+
+.chevron {
+  color: var(--outline);
+  font-size: 9px;
+  line-height: 1;
+}
 
 .table { width: 100%; border-collapse: collapse; }
 
