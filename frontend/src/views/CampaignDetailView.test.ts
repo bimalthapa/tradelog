@@ -43,6 +43,7 @@ const mockCampaign: Campaign = {
   id: 1, ticker: 'NVDA', label: 'Wheel Strategy', status: 'OPEN',
   notes: 'Running the wheel on NVDA.', openedAt: '2024-01-01',
   netCashFlow: 3830, costBasis: 820.83, sharesHeld: 300, openPositionCount: 2,
+  realizedPnl: 135,
 }
 
 const mockTrades: TradeLeg[] = [
@@ -204,12 +205,15 @@ describe('stat strip', () => {
     expect(stats[2]!.classes()).toContain('loss')
   })
 
-  it('shows unrealized P&L from live price and costBasis (index 3)', async () => {
+  it('shows realized P&L with + prefix when positive (index 3)', async () => {
     const stats = await getStatValues(mountView())
-    // priceStore mock returns 875.40 for NVDA; mockCampaign has sharesHeld=300, costBasis=820.83
-    const unrlz = 300 * (875.40 - 820.83)
-    const expected = '+' + unrlz.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-    expect(stats[3]!.text()).toBe(expected)
+    expect(stats[3]!.text()).toBe('+$135.00')
+  })
+
+  it('applies loss class to realized P&L when negative (index 3)', async () => {
+    vi.mocked(getCampaign).mockResolvedValue({ ...mockCampaign, realizedPnl: -50 })
+    const stats = await getStatValues(mountView())
+    expect(stats[3]!.classes()).toContain('loss')
   })
 
   it('shows current price from priceStore (index 4)', async () => {

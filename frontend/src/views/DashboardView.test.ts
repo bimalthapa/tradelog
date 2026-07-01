@@ -71,3 +71,17 @@ describe('DashboardView — empty states', () => {
     expect(cells.some(c => c.text() === 'No closed campaigns')).toBe(false)
   })
 })
+
+describe('DashboardView — no unrealized P&L', () => {
+  it('does not render an UNRLZ P&L column header', () => {
+    const wrapper = mountView(mockActive)
+    const headers = wrapper.findAll('.th').map(h => h.text())
+    expect(headers).not.toContain('UNRLZ P&L')
+  })
+
+  it('does not render a TOTAL UNREALIZED KPI card', () => {
+    const wrapper = mountView(mockActive)
+    const labels = wrapper.findAll('.kpi-label').map(l => l.text())
+    expect(labels).not.toContain('TOTAL UNREALIZED')
+  })
+})

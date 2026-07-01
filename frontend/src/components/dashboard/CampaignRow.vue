@@ -4,7 +4,6 @@ import StatusChip from '@/components/StatusChip.vue'
 
 defineProps<{
   campaign: Campaign
-  unrealizedPnl: number
 }>()
 
 const emit = defineEmits<{
@@ -42,9 +41,6 @@ function pnlClass(value: number): string {
     <td class="cell mono">{{ campaign.openPositionCount }}</td>
     <td class="cell mono" :class="pnlClass(campaign.netCashFlow)">
       {{ formatPnl(campaign.netCashFlow) }}
-    </td>
-    <td class="cell mono" :class="unrealizedPnl !== 0 ? pnlClass(unrealizedPnl) : 'neutral'">
-      {{ unrealizedPnl !== 0 ? formatPnl(unrealizedPnl) : '—' }}
     </td>
     <td class="cell mono" :class="campaign.realizedPnl != null ? pnlClass(campaign.realizedPnl) : 'neutral'">
       {{ campaign.realizedPnl != null ? formatPnl(campaign.realizedPnl) : '—' }}

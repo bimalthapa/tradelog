@@ -32,9 +32,6 @@ public class Campaign {
     @Column(name = "closed_at")
     private LocalDate closedAt;
 
-    @Column(name = "realized_pnl")
-    private Double realizedPnl;
-
     public Long getId() { return id; }
     public Account getAccount() { return account; }
     public void setAccount(Account account) { this.account = account; }
@@ -50,6 +47,4 @@ public class Campaign {
     public void setOpenedAt(LocalDate openedAt) { this.openedAt = openedAt; }
     public LocalDate getClosedAt() { return closedAt; }
     public void setClosedAt(LocalDate closedAt) { this.closedAt = closedAt; }
-    public Double getRealizedPnl() { return realizedPnl; }
-    public void setRealizedPnl(Double realizedPnl) { this.realizedPnl = realizedPnl; }
 }

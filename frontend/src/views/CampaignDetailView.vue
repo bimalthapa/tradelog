@@ -61,14 +61,6 @@ const currentPrice = computed(() =>
   campaign.value ? priceStore.getPrice(campaign.value.ticker) : null
 )
 
-const unrealizedPnl = computed(() => {
-  const c = campaign.value
-  if (!c || !c.sharesHeld || c.costBasis == null) return 0
-  const price = currentPrice.value
-  if (price == null) return 0
-  return c.sharesHeld * (price - c.costBasis)
-})
-
 const netCashFlow = computed(() =>
   store.trades.reduce((sum, t) => sum + t.netCashFlow, 0)
 )
@@ -384,9 +376,9 @@ async function saveAccount() {
             </div>
           </div>
           <div class="stat">
-            <div class="stat-label">UNRLZ P&amp;L</div>
-            <div class="stat-value" :class="unrealizedPnl >= 0 ? 'profit' : 'loss'">
-              {{ formatSigned(unrealizedPnl) }}
+            <div class="stat-label">RLZ P&amp;L</div>
+            <div class="stat-value" :class="(campaign.realizedPnl ?? 0) >= 0 ? 'profit' : 'loss'">
+              {{ formatSigned(campaign.realizedPnl ?? 0) }}
             </div>
           </div>
           <div class="stat">

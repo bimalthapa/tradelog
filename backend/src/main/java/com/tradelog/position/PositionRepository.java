@@ -28,6 +28,9 @@ public interface PositionRepository extends JpaRepository<Position, Long> {
 
     List<Position> findByCampaignId(Long campaignId);
 
+    @Query("SELECT p FROM Position p WHERE p.campaignId = :campaignId AND p.status = 'OPEN'")
+    List<Position> findOpenPositionsByCampaignId(@Param("campaignId") Long campaignId);
+
     @Query("SELECT p FROM Position p WHERE p.status = 'CLOSED' AND p.instrumentType = 'OPTION'")
     List<Position> findClosedOptionPositions();
 }

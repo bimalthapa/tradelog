@@ -6,6 +6,7 @@ import com.tradelog.campaign.dto.CampaignResponse;
 import com.tradelog.campaign.dto.CreateCampaignRequest;
 import com.tradelog.campaign.dto.UpdateCampaignRequest;
 import com.tradelog.common.exception.ResourceNotFoundException;
+import com.tradelog.position.Position;
 import com.tradelog.position.PositionRepository;
 import com.tradelog.trade.TradeLegRepository;
 import org.springframework.stereotype.Service;
@@ -109,6 +110,14 @@ public class CampaignService {
 
         int openPositionCount = (int) positionRepository.findOpenCountByCampaignId(cid);
 
+        double openValue = 0.0;
+        for (Position p : positionRepository.findOpenPositionsByCampaignId(cid)) {
+            double multiplier = "OPTION".equals(p.getInstrumentType()) ? 100.0 : 1.0;
+            double sign = "BTO".equals(p.getOpenAction()) ? -1.0 : 1.0;
+            openValue += sign * p.getAvgPrice() * p.getOpenQuantity() * multiplier;
+        }
+        double realizedPnl = netCashFlow - openValue;
+
         return new CampaignResponse(
                 campaign.getId(),
                 campaign.getTicker(),
@@ -117,7 +126,7 @@ public class CampaignService {
                 campaign.getNotes(),
                 campaign.getOpenedAt(),
                 campaign.getClosedAt(),
-                campaign.getRealizedPnl(),
+                realizedPnl,
                 netCashFlow,
                 costBasis,
                 sharesHeld > 0 ? (int) sharesHeld : null,

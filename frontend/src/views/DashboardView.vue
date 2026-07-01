@@ -18,13 +18,6 @@ watch(() => store.campaigns, (campaigns) => {
   campaigns.forEach(c => priceStore.ensureTicker(c.ticker))
 })
 
-function unrealizedFor(c: Campaign): number {
-  if (!c.sharesHeld || c.costBasis == null) return 0
-  const price = priceStore.getPrice(c.ticker)
-  if (price == null) return 0
-  return Math.round(c.sharesHeld * (price - c.costBasis))
-}
-
 function filterByAccount(items: Campaign[]): Campaign[] {
   const sel = store.selectedAccountId
   if (sel === 'all') return items
@@ -47,12 +40,9 @@ function onSelect(id: number) {
 
 const TABLE_COLS = [
   'TICKER', 'LABEL', 'COST BASIS', 'SHARES', 'OPEN POS',
-  'NET CASH', 'UNRLZ P&L', 'RLZ P&L', 'STATUS', 'STARTED',
+  'NET CASH', 'RLZ P&L', 'STATUS', 'STARTED',
 ]
 
-const totalUnrealized = computed(() =>
-  allFiltered.value.reduce((sum, c) => sum + unrealizedFor(c), 0)
-)
 const totalRealized = computed(() =>
   allFiltered.value.reduce((sum, c) => sum + (c.realizedPnl ?? 0), 0)
 )
@@ -61,7 +51,6 @@ const totalNetCashFlow = computed(() =>
 )
 
 const kpiStats = computed(() => [
-  { label: 'TOTAL UNREALIZED', value: totalUnrealized.value },
   { label: 'TOTAL REALIZED',   value: totalRealized.value },
   { label: 'NET CASH FLOW',    value: totalNetCashFlow.value },
 ])
@@ -119,7 +108,6 @@ const footerStats = computed(() => [
                 v-for="c in filteredActive"
                 :key="c.id"
                 :campaign="c"
-                :unrealized-pnl="unrealizedFor(c)"
                 @select="onSelect"
               />
             </template>
@@ -151,7 +139,6 @@ const footerStats = computed(() => [
                 v-for="c in filteredClosed"
                 :key="c.id"
                 :campaign="c"
-                :unrealized-pnl="unrealizedFor(c)"
                 @select="onSelect"
               />
             </template>
