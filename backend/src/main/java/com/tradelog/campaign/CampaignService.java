@@ -100,23 +100,24 @@ public class CampaignService {
         Long rawShares = tradeLegRepository.findSharesHeldByCampaignId(cid);
         long sharesHeld = rawShares != null ? rawShares : 0L;
 
-        Double costBasis = null;
-        if (sharesHeld > 0) {
-            Double stockCashFlow = tradeLegRepository.findStockNetCashFlowByCampaignId(cid);
-            if (stockCashFlow != null) {
-                costBasis = -stockCashFlow / sharesHeld;
-            }
-        }
-
         int openPositionCount = (int) positionRepository.findOpenCountByCampaignId(cid);
 
         double openValue = 0.0;
+        long openLongCallQuantity = 0L;
         for (Position p : positionRepository.findOpenPositionsByCampaignId(cid)) {
             double multiplier = "OPTION".equals(p.getInstrumentType()) ? 100.0 : 1.0;
             double sign = "BTO".equals(p.getOpenAction()) ? -1.0 : 1.0;
             openValue += sign * p.getAvgPrice() * p.getOpenQuantity() * multiplier;
+            if ("OPTION".equals(p.getInstrumentType())
+                    && "CALL".equals(p.getOptionType())
+                    && "BTO".equals(p.getOpenAction())) {
+                openLongCallQuantity += p.getOpenQuantity();
+            }
         }
         double realizedPnl = netCashFlow - openValue;
+
+        long unitsHeld = sharesHeld + 100L * openLongCallQuantity;
+        Double costBasis = unitsHeld > 0 ? -netCashFlow / unitsHeld : null;
 
         return new CampaignResponse(
                 campaign.getId(),

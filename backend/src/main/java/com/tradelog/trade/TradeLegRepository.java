@@ -15,9 +15,6 @@ public interface TradeLegRepository extends JpaRepository<TradeLeg, Long> {
     @Query("SELECT SUM(CASE WHEN tl.action IN ('BTO', 'ASSIGNED') THEN tl.quantity WHEN tl.action = 'STC' THEN -tl.quantity ELSE 0 END) FROM TradeLeg tl WHERE tl.campaignId = :campaignId AND tl.instrumentType = 'STOCK'")
     Long findSharesHeldByCampaignId(@Param("campaignId") Long campaignId);
 
-    @Query("SELECT SUM(tl.netCashFlow) FROM TradeLeg tl WHERE tl.campaignId = :campaignId AND tl.instrumentType = 'STOCK'")
-    Double findStockNetCashFlowByCampaignId(@Param("campaignId") Long campaignId);
-
     List<TradeLeg> findByCampaignIdOrderByTradedAtAsc(Long campaignId);
 
     List<TradeLeg> findByCampaignIdOrderByTradedAtAscIdAsc(Long campaignId);
